@@ -97,13 +97,15 @@ ficheiro. Para usar:
 O link partilhado abre o receiver; o conteúdo continua a passar apenas pela
 luz do ecrã para a câmara.
 
-O transporte visual usa agora a biblioteca JAB Code real, através da
-build JavaScript de `TMSSassen/JABCodeJS`, em
-`decoder/static/third-party/`. O JAB já fornece finder patterns, paleta,
-correção LDPC e leitura de perspetiva; o VEF-3 coloca por cima o cabeçalho e o
-Fountain stream. O formato do pacote está em `decoder/static/jab-transfer.js`.
-Cada pacote leva os índices dos blocos Fountain que foram combinados por XOR,
-por isso os frames podem chegar fora de ordem e alguns podem perder-se.
+O transporte visual usa a biblioteca JAB Code real. O wasm do encoder/decoder
+está em `decoder/static/third-party/jabcode.wasm` (compilado do core MIT de
+`jabcode/jabcode` com Zig), carregado por `decoder/static/third-party/jabcodeJSLib.min.js`.
+O JAB fornece finder patterns, paleta, correção LDPC e leitura de perspetiva;
+o VEF-3 coloca por cima o cabeçalho e o Fountain stream. O formato do pacote
+está em `decoder/static/jab-transfer.js`. Cada pacote leva os índices dos
+blocos Fountain que foram combinados por XOR, por isso os frames podem chegar
+fora de ordem e alguns podem perder-se. Para reconstruir o wasm, ver
+`decoder/static/third-party/README.md`.
 
 ## 📐 Especificações Técnicas
 
@@ -122,13 +124,15 @@ O VEF-3 coloca um pacote Fountain dentro de cada JAB Code:
 |---------|-------|
 | JAB symbols por frame | 1 primário |
 | Cores JAB | 8 |
-| Pacote Fountain | 1024 bytes |
-| 30 fps (taxa nominal) | ~30 KB/s |
-| 60 fps (se o decoder acompanhar) | ~60 KB/s |
+| Tamanho do frame | ajustado automaticamente até ~2877 B (limite do menu) |
+| Compressão | gzip automático quando compensa (texto/PDF/código) |
+| 30 fps (taxa nominal) | até ~86 KB/s |
+| 60 fps (se o decoder acompanhar) | até ~170 KB/s |
 
-A taxa real depende do tempo que o JAB Code demora a ser gerado e lido pela
-câmara. É preferível um stream mais lento que o receiver consiga validar a um
-número teórico que produza frames perdidos.
+O tamanho do frame é escolhido pelo sender ao testar o que o encoder JAB
+realmente aguenta, e ficheiros compressíveis são gzip antes de codificar — um
+documento de texto de 200 KB pode chegar a ~1 KB. A taxa real depende do tempo
+que o JAB Code demora a ser gerado e lido pela câmara.
 
 ### Tempos de Transferência (estimativa)
 

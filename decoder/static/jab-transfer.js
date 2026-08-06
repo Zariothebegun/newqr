@@ -12,16 +12,12 @@
     const MAX_FILE_BYTES = 64 * 1024 * 1024;
     let jabPromise;
 
-    // How many JAB symbols to ask for, given how many payload bytes the frame
-    // will carry. JAB grows capacity faster than reliability here because the
-    // Fountain layer already absorbs dropped frames; symbols mostly just add
-    // more module area. Values are tuned so a frame never silently exceeds the
-    // capacity the library can encode for a given symbol count.
-    function symbolsForBlock(blockLen) {
-        if (blockLen <= 1600) return 1;
-        if (blockLen <= 3400) return 2;
-        if (blockLen <= 6000) return 4;
-        return 6;
+    // A single symbol carries far more payload (roughly 6 KB of message text
+    // with 8 colours) than the sender ever requests, and the Fountain layer
+    // already absorbs dropped frames, so extra slave symbols are unnecessary
+    // and only add rendering cost. We always ask for one symbol.
+    function symbolsForBlock(_blockLen) {
+        return 1;
     }
 
     function toBase64(bytes) {
@@ -79,10 +75,9 @@
         return jabPromise;
     }
     async function callWhenReady(operation) {
-        // The upstream Emscripten module fetches/initializes its WASM after the
-        // ES module itself has loaded. Calling encode_message in that small
-        // window raises the characteristic `asm.m` stack error. Wait here
-        // instead of leaving the sender on "generating frame 0" forever.
+        // The wasm module instantiates asynchronously the first time it is
+        // used; retry briefly so the first encode doesn't fail while the
+        // runtime is still becoming ready.
         let lastError;
         for (let attempt = 0; attempt < 120; attempt++) {
             try { return await operation(); }
