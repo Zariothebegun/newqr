@@ -2,13 +2,27 @@
  * remains the loss-tolerant file layer. */
 (function (root) {
     "use strict";
-    // One primary symbol lets JAB choose its own version (up to the large
-    // single-symbol capacity) and keeps each frame compact and fast. The
-    // payload is Fountain-sliced, so we do not need JAB slave symbols here.
-    const JAB_SYMBOLS = 1;
+    // The payload is Fountain-sliced, so JAB slave symbols are only needed as
+    // extra message capacity, never for reliability. The default symbol count
+    // scales with the payload size: a single symbol is the sweet spot for the
+    // small frames the UI's low "bytes/frame" settings request, and extra
+    // symbols buy the capacity the higher settings need to carry a dense,
+    // decimen-style frame without the sender having to shrink the block.
     const JAB_COLORS = 8;
     const MAX_FILE_BYTES = 64 * 1024 * 1024;
     let jabPromise;
+
+    // How many JAB symbols to ask for, given how many payload bytes the frame
+    // will carry. JAB grows capacity faster than reliability here because the
+    // Fountain layer already absorbs dropped frames; symbols mostly just add
+    // more module area. Values are tuned so a frame never silently exceeds the
+    // capacity the library can encode for a given symbol count.
+    function symbolsForBlock(blockLen) {
+        if (blockLen <= 1600) return 1;
+        if (blockLen <= 3400) return 2;
+        if (blockLen <= 6000) return 4;
+        return 6;
+    }
 
     function toBase64(bytes) {
         const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -36,22 +50,28 @@
     function utf8(text) { return new TextEncoder().encode(text); }
     function text(bytes) { return new TextDecoder().decode(bytes); }
 
-    function packPacket({ sessionId, seq, k, blockLen, totalLen, fileCrc32, indices, filename, data }) {
+    function packPacket({ sessionId, seq, k, blockLen, totalLen, fileCrc32, indices, filename, data, compressed, originalLen }) {
+        // `n` is the length of the bytes actually Fountain-encoded (after
+        // gzip, when compression applies); `o` is the original file length the
+        // receiver must reproduce after inflating, and `z` flags that gzip was
+        // used. CRC covers the ORIGINAL bytes, so a mismatch can never be
+        // masked by a bad inflate.
         return JSON.stringify({
             v: 1, s: sessionId >>> 0, q: seq >>> 0, k: k >>> 0, b: blockLen >>> 0,
-            n: totalLen >>> 0, c: fileCrc32 >>> 0, i: indices, f: toBase64(utf8(filename || "received_file")), d: toBase64(data)
+            n: totalLen >>> 0, o: (originalLen || totalLen) >>> 0, z: compressed ? 1 : 0,
+            c: fileCrc32 >>> 0, i: indices, f: toBase64(utf8(filename || "received_file")), d: toBase64(data)
         });
     }
     function unpackPacket(encoded) {
         let packet;
         try { packet = JSON.parse(encoded); } catch (_) { return null; }
-        if (!packet || packet.v !== 1 || !Number.isSafeInteger(packet.s) || !Number.isSafeInteger(packet.q) || !Number.isSafeInteger(packet.k) || !Number.isSafeInteger(packet.b) || !Number.isSafeInteger(packet.n) || !Array.isArray(packet.i) || typeof packet.d !== "string") return null;
-        if (packet.k < 1 || packet.k > 65536 || packet.b < 1 || packet.b > 16384 || packet.n < 1 || packet.n > MAX_FILE_BYTES || packet.i.length < 1 || packet.i.length > 5) return null;
+        if (!packet || packet.v !== 1 || !Number.isSafeInteger(packet.s) || !Number.isSafeInteger(packet.q) || !Number.isSafeInteger(packet.k) || !Number.isSafeInteger(packet.b) || !Number.isSafeInteger(packet.n) || !Number.isSafeInteger(packet.o) || !Array.isArray(packet.i) || typeof packet.d !== "string") return null;
+        if (packet.k < 1 || packet.k > 65536 || packet.b < 1 || packet.b > 16384 || packet.n < 1 || packet.n > MAX_FILE_BYTES || packet.o < 1 || packet.o > MAX_FILE_BYTES || packet.n > packet.o || packet.i.length < 1 || packet.i.length > 5) return null;
         try {
             const data = fromBase64(packet.d);
             const filename = packet.f ? text(fromBase64(packet.f)) : "received_file";
             if (data.length < packet.b) return null;
-            return { sessionId: packet.s >>> 0, seq: packet.q >>> 0, k: packet.k, blockLen: packet.b, totalLen: packet.n, fileCrc32: packet.c >>> 0, indices: packet.i.map(Number), filename, data: data.slice(0, packet.b) };
+            return { sessionId: packet.s >>> 0, seq: packet.q >>> 0, k: packet.k, blockLen: packet.b, totalLen: packet.n, originalLen: packet.o >>> 0, compressed: !!packet.z, fileCrc32: packet.c >>> 0, indices: packet.i.map(Number), filename, data: data.slice(0, packet.b) };
         } catch (_) { return null; }
     }
     async function jab() {
@@ -73,15 +93,16 @@
         }
         throw lastError || new Error("JAB Code runtime did not initialize");
     }
-    async function encodePacket(packet) {
+    async function encodePacket(packet, symbols) {
         const instance = await jab();
+        const count = symbols || symbolsForBlock(packet.blockLen || 0);
         // JAB's own palette, finder patterns and LDPC ECC are deliberately
         // retained. The only thing we replace is the payload protocol inside.
-        return callWhenReady(() => instance.encode_message(packPacket(packet), JAB_SYMBOLS, JAB_COLORS));
+        return callWhenReady(() => instance.encode_message(packPacket(packet), count, JAB_COLORS));
     }
     async function decodeImage(blob) {
         const instance = await jab();
         try { return unpackPacket(await callWhenReady(() => instance.decode_message(blob))); } catch (_) { return null; }
     }
-    root.VEFJab = { JAB_SYMBOLS, JAB_COLORS, MAX_FILE_BYTES, crc32, encodePacket, decodeImage, packPacket, unpackPacket };
+    root.VEFJab = { JAB_COLORS, MAX_FILE_BYTES, crc32, encodePacket, decodeImage, packPacket, unpackPacket, symbolsForBlock };
 })(window);
