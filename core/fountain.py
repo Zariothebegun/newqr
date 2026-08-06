@@ -36,6 +36,7 @@ class FountainEncoder:
             return {
                 'id': packet_id,
                 'block_indices': [packet_id],
+                'indices': [packet_id],
                 'data': self.blocks[packet_id],
                 'num_blocks': self.k,
                 'checksum': self.checksum,
@@ -48,13 +49,15 @@ class FountainEncoder:
             return {
                 'id': packet_id,
                 'block_indices': [0],
+                'indices': [0],
                 'data': self.blocks[0],
                 'num_blocks': self.k,
                 'checksum': '',
                 'original_size': len(self.data)
             }
 
-        degree = self._random.randint(2, min(5, self.k))
+        minimum_degree = 3 if self.k >= 3 else 2
+        degree = self._random.randint(minimum_degree, min(5, self.k))
         indices = self._random.sample(range(self.k), degree)
 
         # XOR
@@ -66,6 +69,7 @@ class FountainEncoder:
         return {
             'id': packet_id,
             'block_indices': indices,
+            'indices': indices,
             'data': bytes(result),
             'num_blocks': self.k,
             'checksum': '',
@@ -99,7 +103,7 @@ class FountainDecoder:
             self.original_size = packet.get('original_size', 0)
             self.checksum = packet.get('checksum', '')
 
-        indices = list(packet['block_indices'])
+        indices = list(packet.get('indices', packet.get('block_indices', [])))
         data = list(packet['data'])
 
         # Eliminate known blocks

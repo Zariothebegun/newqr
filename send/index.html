@@ -193,27 +193,32 @@
     </main>
 
     <script src="/static/protocol.js"></script>
+    <script src="/static/fountain.js"></script>
     <script>
         (() => {
             "use strict";
             const P = window.VEFProtocol;
+            const F = window.VEFFountain;
             const MAX_FILE_SIZE = 64 * 1024 * 1024;
             const CALIBRATION_FRAMES = 3;
+            const BLOCK_LENGTH = P.FOUNTAIN_BLOCK_SIZE;
             const $ = id => document.getElementById(id);
             const state = {
                 file: null,
                 data: null,
-                fileId: 0,
+                sessionId: 0,
                 fileCrc32: 0,
-                totalPackets: 0,
-                packetIndex: 0,
+                encoder: null,
+                k: 0,
+                sequenceLimit: 0,
+                sequence: 0,
                 calibrationLeft: 0,
                 frameNumber: 0,
+                cycle: 0,
                 running: false,
                 generating: false,
                 animationFrame: null,
-                lastDraw: 0,
-                cycle: 0
+                lastDraw: 0
             };
 
             function formatBytes(bytes) {
@@ -231,16 +236,20 @@
             }
 
             function updateStats() {
-                $("packet-stat").textContent = state.totalPackets ? `${Math.min(state.packetIndex + 1, state.totalPackets)} / ${state.totalPackets}` : "—";
+                $("packet-stat").textContent = state.encoder ? `K=${state.k}` : "—";
                 $("frame-stat").textContent = state.frameNumber ? String(state.frameNumber) : "—";
-                $("payload-stat").textContent = `${formatBytes(P.PAYLOAD_BYTES)}`;
+                $("payload-stat").textContent = state.encoder ? `${BLOCK_LENGTH} B · ${P.DATA_VALUES} blocos` : "—";
                 $("rate-stat").textContent = `${$("fps").value} fps`;
-                $("progress-bar").style.width = state.totalPackets ? `${(state.packetIndex / state.totalPackets) * 100}%` : "0";
+                $("progress-bar").style.width = state.sequenceLimit ? `${(state.sequence / state.sequenceLimit) * 100}%` : "0";
+            }
+
+            function makeSessionId() {
+                if (window.crypto && crypto.getRandomValues) return crypto.getRandomValues(new Uint32Array(1))[0];
+                return Math.floor(Math.random() * 0xffffffff) >>> 0;
             }
 
             function createHelloFile() {
-                const file = new File([new TextEncoder().encode("hello")], "hello.txt", { type: "text/plain" });
-                chooseFile(file);
+                chooseFile(new File([new TextEncoder().encode("hello")], "hello.txt", { type: "text/plain" }));
             }
 
             function chooseFile(file) {
@@ -254,19 +263,24 @@
                 reader.onload = () => {
                     state.file = file;
                     state.data = new Uint8Array(reader.result);
-                    state.fileId = (crypto.getRandomValues(new Uint32Array(1)))[0];
+                    state.sessionId = makeSessionId();
                     state.fileCrc32 = P.crc32(state.data);
-                    state.totalPackets = Math.max(1, Math.ceil(state.data.length / P.PAYLOAD_BYTES));
-                    state.packetIndex = 0;
+                    state.encoder = new F.FountainEncoder(state.data, BLOCK_LENGTH, state.sessionId);
+                    state.k = state.encoder.k;
+                    // First K frames are systematic blocks. About 5% extra frames are
+                    // XOR equations, matching the intended ~1.05× Fountain overhead.
+                    state.sequenceLimit = state.k + Math.max(8, Math.ceil(state.k * 0.05));
+                    state.sequence = 0;
                     state.frameNumber = 0;
                     state.calibrationLeft = CALIBRATION_FRAMES;
+                    state.cycle = 0;
                     $("file-name").textContent = file.name;
-                    $("file-size").textContent = `${formatBytes(file.size)} · CRC ${state.fileCrc32.toString(16).padStart(8, "0")}`;
+                    $("file-size").textContent = `${formatBytes(file.size)} · CRC ${state.fileCrc32.toString(16).padStart(8, "0")} · K=${state.k}`;
                     $("file-card").classList.add("visible");
                     $("start-btn").disabled = false;
                     $("video-btn").disabled = false;
                     $("fullscreen-btn").disabled = false;
-                    setStatus("Pronto para iniciar");
+                    setStatus("Pronto para iniciar — Fountain Codes ativos");
                     updateStats();
                 };
                 reader.readAsArrayBuffer(file);
@@ -277,28 +291,28 @@
                 if (state.calibrationLeft > 0) {
                     P.drawCalibrationFrame(canvas);
                     state.calibrationLeft--;
-                    setStatus("A calibrar a câmara…");
+                    setStatus("Frame 0: calibração das 64 cores");
                 } else {
-                    const start = state.packetIndex * P.PAYLOAD_BYTES;
-                    const payload = state.data.slice(start, start + P.PAYLOAD_BYTES);
+                    const packet = state.encoder.packet(state.sequence);
                     const header = P.packHeader({
-                        fileId: state.fileId,
-                        packetIndex: state.packetIndex,
-                        totalPackets: state.totalPackets,
-                        originalSize: state.data.length,
-                        payloadLength: payload.length,
+                        sessionId: state.sessionId,
+                        seq: state.sequence,
+                        k: state.k,
+                        blockLen: BLOCK_LENGTH,
+                        totalLen: state.data.length,
                         fileCrc32: state.fileCrc32,
+                        indices: packet.indices,
                         filename: state.file.name
                     });
-                    P.drawDataFrame(canvas, payload, header);
-                    state.packetIndex++;
-                    if (state.packetIndex >= state.totalPackets) {
-                        state.packetIndex = 0;
+                    P.drawDataFrame(canvas, packet.data, header, state.sequence);
+                    if ((state.sequence % 30) === 0) setStatus("Recalibração automática + dados");
+                    else setStatus("A enviar pacotes Fountain — aponta para os blocos");
+                    state.sequence++;
+                    if (state.sequence >= state.sequenceLimit) {
+                        state.sequence = 0;
                         state.calibrationLeft = CALIBRATION_FRAMES;
                         state.cycle++;
-                        setStatus(`A repetir transferência · ciclo ${state.cycle}`);
-                    } else {
-                        setStatus("A enviar — aponta o telemóvel para os blocos");
+                        setStatus(`A repetir Fountain Codes · ciclo ${state.cycle}`);
                     }
                 }
                 state.frameNumber++;
@@ -316,38 +330,56 @@
                 state.animationFrame = requestAnimationFrame(animationLoop);
             }
 
+            function start() {
+                if (!state.data || state.generating) return;
+                state.running = true;
+                state.lastDraw = 0;
+                $("start-btn").disabled = true;
+                $("pause-btn").disabled = false;
+                $("pause-btn").textContent = "Ⅱ Pausar";
+                setStatus("A iniciar stream Fountain");
+                state.animationFrame = requestAnimationFrame(animationLoop);
+            }
+
+            function pause() {
+                state.running = !state.running;
+                if (state.running) {
+                    $("pause-btn").textContent = "Ⅱ Pausar";
+                    state.lastDraw = 0;
+                    state.animationFrame = requestAnimationFrame(animationLoop);
+                    setStatus("A continuar Fountain stream");
+                } else {
+                    $("pause-btn").textContent = "▶ Continuar";
+                    cancelAnimationFrame(state.animationFrame);
+                    setStatus("Pausado");
+                }
+            }
+
             function sleep(milliseconds) {
                 return new Promise(resolve => window.setTimeout(resolve, milliseconds));
             }
 
             function recordingMimeType() {
                 if (!window.MediaRecorder) return "";
-                const choices = [
-                    "video/webm;codecs=vp9",
-                    "video/webm;codecs=vp8",
-                    "video/webm",
-                    "video/mp4"
-                ];
+                const choices = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
                 return choices.find(type => MediaRecorder.isTypeSupported(type)) || "";
             }
 
             async function generateVideo() {
                 if (!state.data || state.generating) return;
                 if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-                    setStatus("Este navegador não consegue gravar vídeo offline", true);
+                    setStatus("Este navegador não consegue gerar vídeo offline", true);
                     return;
                 }
-
                 const mimeType = recordingMimeType();
                 if (!mimeType) {
                     setStatus("Formato de vídeo não suportado neste navegador", true);
                     return;
                 }
-
                 cancelAnimationFrame(state.animationFrame);
                 state.running = false;
                 state.generating = true;
-                state.packetIndex = 0;
+                state.sequence = 0;
                 state.calibrationLeft = CALIBRATION_FRAMES;
                 state.frameNumber = 0;
                 state.cycle = 0;
@@ -355,34 +387,27 @@
                 $("pause-btn").disabled = true;
                 $("video-btn").disabled = true;
                 $("reset-btn").disabled = true;
-                $("video-btn").textContent = "⏳ A gerar vídeo…";
+                $("video-btn").textContent = "⏳ A gerar vídeo Fountain…";
 
                 const fps = Number($("fps").value);
                 const canvas = $("sender-canvas");
                 P.drawCalibrationFrame(canvas);
                 const stream = canvas.captureStream(fps);
-                const recorder = new MediaRecorder(stream, {
-                    mimeType,
-                    videoBitsPerSecond: 8_000_000
-                });
+                const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
                 const chunks = [];
-                const stopped = new Promise(resolve => {
-                    recorder.addEventListener("stop", resolve, { once: true });
-                });
+                const stopped = new Promise(resolve => recorder.addEventListener("stop", resolve, { once: true }));
                 recorder.addEventListener("dataavailable", event => {
                     if (event.data && event.data.size) chunks.push(event.data);
                 });
 
                 try {
                     recorder.start(1000);
-                    // Two passes make a saved video useful even when the
-                    // receiver misses a frame during playback.
-                    const framesToGenerate = (CALIBRATION_FRAMES + state.totalPackets) * 2;
+                    const framesToGenerate = (CALIBRATION_FRAMES + state.sequenceLimit) * 2;
                     for (let frame = 0; frame < framesToGenerate; frame++) {
                         drawNextFrame();
                         const track = stream.getVideoTracks()[0];
                         if (track && track.requestFrame) track.requestFrame();
-                        setStatus(`A gerar vídeo · ${frame + 1} / ${framesToGenerate}`);
+                        setStatus(`A gerar vídeo Fountain · ${frame + 1} / ${framesToGenerate}`);
                         await sleep(1000 / fps);
                     }
                     recorder.stop();
@@ -392,12 +417,12 @@
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement("a");
                     link.href = url;
-                    link.download = `${state.file.name.replace(/\\.[^.]*$/, "")}.vef.${extension}`;
+                    link.download = `${state.file.name.replace(/\.[^.]*$/, "")}.fountain.${extension}`;
                     document.body.appendChild(link);
                     link.click();
                     link.remove();
                     window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-                    setStatus(`Vídeo criado (${formatBytes(blob.size)})`);
+                    setStatus(`Vídeo Fountain criado (${formatBytes(blob.size)})`);
                 } catch (error) {
                     if (recorder.state !== "inactive") recorder.stop();
                     setStatus(`Erro ao gerar vídeo: ${error.message}`, true);
@@ -412,21 +437,16 @@
                 }
             }
 
-            function receiverUrl() {
-                return new URL("/receive/", window.location.href).href;
-            }
+            function receiverUrl() { return new URL("/receive/", window.location.href).href; }
 
             async function copyReceiverLink() {
                 const input = $("receiver-link");
                 try {
                     await navigator.clipboard.writeText(input.value);
-                    $("share-status").textContent = "Link copiado.";
                 } catch (_) {
-                    input.focus();
-                    input.select();
-                    document.execCommand("copy");
-                    $("share-status").textContent = "Link copiado.";
+                    input.focus(); input.select(); document.execCommand("copy");
                 }
+                $("share-status").textContent = "Link copiado.";
             }
 
             async function shareReceiverLink() {
@@ -441,40 +461,12 @@
                 await copyReceiverLink();
             }
 
-            function start() {
-                if (!state.data || state.generating) return;
-                state.running = true;
-                state.lastDraw = 0;
-                $("start-btn").disabled = true;
-                $("pause-btn").disabled = false;
-                $("pause-btn").textContent = "Ⅱ Pausar";
-                setStatus("A iniciar…");
-                state.animationFrame = requestAnimationFrame(animationLoop);
-            }
-
-            function pause() {
-                state.running = !state.running;
-                if (state.running) {
-                    $("pause-btn").textContent = "Ⅱ Pausar";
-                    state.lastDraw = 0;
-                    state.animationFrame = requestAnimationFrame(animationLoop);
-                    setStatus("A continuar transferência");
-                } else {
-                    $("pause-btn").textContent = "▶ Continuar";
-                    cancelAnimationFrame(state.animationFrame);
-                    setStatus("Pausado");
-                }
-            }
-
             function reset() {
                 state.running = false;
                 cancelAnimationFrame(state.animationFrame);
-                state.file = null;
-                state.data = null;
-                state.totalPackets = 0;
-                state.packetIndex = 0;
-                state.frameNumber = 0;
-                state.calibrationLeft = 0;
+                state.file = null; state.data = null; state.encoder = null;
+                state.k = 0; state.sequenceLimit = 0; state.sequence = 0;
+                state.frameNumber = 0; state.calibrationLeft = 0;
                 $("file-input").value = "";
                 $("file-card").classList.remove("visible");
                 $("start-btn").disabled = true;
@@ -510,12 +502,10 @@
 
             const dropzone = $("dropzone");
             ["dragenter", "dragover"].forEach(type => dropzone.addEventListener(type, event => {
-                event.preventDefault();
-                dropzone.classList.add("dragover");
+                event.preventDefault(); dropzone.classList.add("dragover");
             }));
             ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => {
-                event.preventDefault();
-                dropzone.classList.remove("dragover");
+                event.preventDefault(); dropzone.classList.remove("dragover");
             }));
             dropzone.addEventListener("drop", event => chooseFile(event.dataTransfer.files[0]));
             updateStats();

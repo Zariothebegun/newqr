@@ -102,27 +102,27 @@ do ficheiro.
 
 O formato de blocos, o cabeçalho, o CRC-32 e a conversão de cores estão em
 `core/protocol.py` e `decoder/static/protocol.js`, para o emissor e o receptor
-usarem exatamente a mesma lógica.
+usarem exatamente a mesma lógica. O Frame 0 mostra as 64 cores de referência;
+a cada 30 frames aparecem quatro referências em escala de cinzentos para
+recalibrar a câmara. Cada pacote leva os índices dos blocos Fountain que foram
+combinados por XOR, por isso os frames podem chegar fora de ordem e alguns
+podem perder-se.
 
 ## 📐 Especificações Técnicas
 
 ### O Frame Visual
 
-Cada frame contém (3.680 blocos de dados, 80 blocos de cabeçalho e linhas reservadas):
+Cada frame é uma imagem de **800×600 pixéis** com uma grelha de 80×50 = 4000 blocos: 3.836 valores de dados, quatro referências e 160 valores de meta-dados.
 
 ```
 ┌────────────────────────────────────────────┐
-│ ■ ◻ ■ ■ ◻ ■ │ ← Corner markers (4)
-│ · · · · · · · · · · · · · · · · · · · · · │ ← Timing lines
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │ ← 3680 data blocks
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │   (80 cols × 50 rows)
-│ · · · · · · · · · · · · · · · · · · · · · │
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │
-│ · · · · · · · · · · · · · · · · · · · · · │
-│ ■ ◻ ■ ■ ◻ ■ │
-│ ▓ ░ ▓ ░ ░ ▓ ▓ ░ ▓ ░ ▓ ░ ▓ ░ ░ ▓ ▓ ░ ▓ ░ │ ← Meta-data strip
+│   L verde                         L vermelho│
+│                                            │
+│       80 × 50 blocos de cor sólida          │
+│       cada bloco tem 8 × 8 pixéis           │
+│                                            │
+│       L azul                 L amarelo       │
+│       faixa inferior: 160 blocos de meta-dados
 └────────────────────────────────────────────┘
 ```
 
@@ -131,17 +131,20 @@ Cada frame contém (3.680 blocos de dados, 80 blocos de cabeçalho e linhas rese
 Cada bloco codifica **6 bits** usando cor RGB:
 - 4 níveis por canal (0, 85, 170, 255)
 - 64 cores possíveis por bloco
-- 4000 blocos por frame = **24,000 bits = 3 KB** por frame
+- cada byte do pacote ocupa dois blocos: os 6 bits altos e os 2 bits baixos
+- os quatro bits restantes do segundo bloco ficam reservados
 
 ### Capacidade
 
 | Métrica | Valor |
 |---------|-------|
-| Blocos de dados por frame | 3680 |
+| Blocos totais por frame | 4000 |
+| Blocos de dados | 3836 |
 | Bits por bloco | 6 |
-| Payload máximo por frame | 2760 bytes |
-| 30 fps | ~81 KB/s |
-| 60 fps | ~162 KB/s |
+| Payload máximo por frame | 1918 bytes |
+| Pacote Fountain | 1 KB |
+| 30 fps (sem overhead) | ~56 KB/s |
+| 60 fps (sem overhead) | ~112 KB/s |
 
 ### Tempos de Transferência (estimativa)
 
@@ -160,13 +163,14 @@ newqr/
 │   ├── __init__.py
 │   ├── color_codec.py       # Codificação de bytes para cores
 │   ├── fountain.py          # Fountain Codes (LT codes)
-│   └── frame.py             # Renderização de frames
+│   ├── frame.py             # Renderização 800×600 dos frames
+│   └── protocol.py          # Formato comum Python/JavaScript
 ├── encoder/                 # Encoder (computador)
 │   ├── __init__.py
 │   └── video_generator.py   # Gerador de vídeos
 ├── decoder/                 # Receiver web e protocolo JS
 │   ├── index.html           # Página para ler com a câmara
-│   └── static/              # Protocolo partilhado e receiver
+│   └── static/              # Protocolo, Fountain e receiver JavaScript
 ├── send/                    # Página para escolher e emitir ficheiros
 │   └── index.html
 ├── assets/                  # Assets e demos

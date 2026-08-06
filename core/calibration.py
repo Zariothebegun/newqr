@@ -9,6 +9,17 @@ from collections import defaultdict
 import hashlib
 import zlib
 
+from .protocol import (
+    CALIBRATION_GRID,
+    DATA_POSITIONS,
+    FRAME_HEIGHT,
+    FRAME_WIDTH,
+    GRID_OFFSET_X,
+    GRID_OFFSET_Y,
+    METADATA_ROWS,
+    values_to_bytes as protocol_values_to_bytes,
+)
+
 
 class ColorCalibrator:
     """
@@ -163,10 +174,10 @@ class FrameVerifier:
 
         # Corner positions (normalized 0-1)
         self.corners = {
-            'TL': (0.05, 0.05),
-            'TR': (0.95, 0.05),
-            'BL': (0.05, 0.95),
-            'BR': (0.95, 0.95)
+            'TL': (24 / FRAME_WIDTH, 36 / FRAME_HEIGHT),
+            'TR': ((FRAME_WIDTH - 24) / FRAME_WIDTH, 36 / FRAME_HEIGHT),
+            'BL': (24 / FRAME_WIDTH, (FRAME_HEIGHT - 36) / FRAME_HEIGHT),
+            'BR': ((FRAME_WIDTH - 24) / FRAME_WIDTH, (FRAME_HEIGHT - 36) / FRAME_HEIGHT),
         }
 
         # Corner colors for detection
@@ -200,7 +211,7 @@ class FrameVerifier:
             expected = self.corner_colors[name]
             diff = sum(abs(a - e) for a, e in zip(avg_color, expected))
 
-            if diff < 100:  # Within threshold
+            if diff < 450:  # L marker intersections include black around the arms
                 detected[name] = (x, y)
 
         self.corner_detected = len(detected) >= 3  # Need at least 3 corners
@@ -214,8 +225,8 @@ class FrameVerifier:
         h, w = image.shape[:2]
 
         # Calculate pixel coordinates
-        px = int(col * self.block_size + self.block_size // 2)
-        py = int(row * self.block_size + self.block_size // 2)
+        px = int(GRID_OFFSET_X + col * self.block_size + self.block_size // 2)
+        py = int(GRID_OFFSET_Y + row * self.block_size + self.block_size // 2)
 
         # Sample 4x4 region around center
         x1, x2 = max(0, px-2), min(w, px+2)
@@ -243,21 +254,18 @@ class FrameVerifier:
 
         self.valid_frames += 1
 
-        # Read data blocks (rows 2-48, leave margin for timing)
+        # Read the exact protocol positions: rows 0-47 carry data except
+        # four recurring reference cells; rows 48-49 carry metadata.
         values = []
+        for col, row in DATA_POSITIONS:
+            r, g, b = self.sample_block(image, col, row)
+            values.append(self.calibrator.decode_color(r, g, b))
 
-        for row in range(2, 48):
+        metadata_values = []
+        for row in METADATA_ROWS:
             for col in range(self.frame_cols):
                 r, g, b = self.sample_block(image, col, row)
-                value = self.calibrator.decode_color(r, g, b)
-                values.append(value)
-
-        # Read metadata row (row 49)
-        metadata_values = []
-        for col in range(self.frame_cols):
-            r, g, b = self.sample_block(image, col, 49)
-            value = self.calibrator.decode_color(r, g, b)
-            metadata_values.append(value)
+                metadata_values.append(self.calibrator.decode_color(r, g, b))
 
         # Extract metadata
         # Note: In production, would properly parse metadata for frame index, etc.
@@ -277,9 +285,8 @@ class FrameVerifier:
         if not self.detect_corners(image):
             return 0
 
-        # Read the 8x8 calibration grid (assuming it's in center)
-        grid_x = 10  # Starting column
-        grid_y = 5   # Starting row
+        # Read the centered 8x8 calibration grid.
+        grid_x, grid_y = CALIBRATION_GRID
 
         colors_sampled = 0
 
@@ -352,30 +359,8 @@ class PacketReconstructor:
 
     @staticmethod
     def values_to_bytes(values: List[int]) -> bytes:
-        """Convert 6-bit values to bytes."""
-        if not values:
-            return b''
-
-        result = bytearray()
-
-        for i in range(0, len(values), 5):
-            chunk = values[i:i+5]
-
-            # Pad to 5 if needed
-            while len(chunk) < 5:
-                chunk.append(0)
-
-            # Unpack 5 values -> 4 bytes
-            v1, v2, v3, v4, v5 = chunk[:5]
-
-            b0 = ((v1 << 2) | ((v2 >> 4) & 0x03)) & 0xFF
-            b1 = (((v2 & 0x0F) << 4) | ((v3 >> 2) & 0x03)) & 0xFF
-            b2 = (((v3 & 0x03) << 6) | (v4 & 0x3F)) & 0xFF
-            b3 = ((v5 << 2) | ((v1 >> 4) & 0x03)) & 0xFF  # Mix for verification
-
-            result.extend([b0, b1, b2, b3])
-
-        return bytes(result)
+        """Convert pairs of 6-bit values to bytes."""
+        return protocol_values_to_bytes(values)
 
     def verify_packet(self, packet: dict) -> bool:
         """Verify packet integrity using CRC."""
