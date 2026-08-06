@@ -29,7 +29,7 @@
 
     class ColorCalibrator {
         constructor() {
-            this.samples = [[], [], []];
+            this.samples = Array.from({ length: 3 }, () => Array.from({ length: 4 }, () => []));
             this.centers = [P.LEVELS.slice(), P.LEVELS.slice(), P.LEVELS.slice()];
             this.ready = false;
         }
