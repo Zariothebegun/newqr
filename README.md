@@ -86,65 +86,49 @@ A aplicação web tem agora as duas páginas que faltavam:
 - `GET /receive/` — abrir a câmara do telemóvel, ler os blocos e descarregar o ficheiro.
 
 O envio é local: o ficheiro é lido no navegador e nunca é carregado para o
-servidor. O emissor repete os blocos até o receptor chegar a 100%. Para usar:
+servidor. O emissor começa a repetir os pacotes Fountain assim que escolhes o
+ficheiro. Para usar:
 
-1. Abra `/receive/` no telemóvel e clique em **Iniciar Câmara**.
-2. Abra `/send/` no computador, escolha o ficheiro e clique em **Iniciar transferência**.
-3. Aumente o brilho, use **Ecrã inteiro** e aponte o telemóvel para os blocos.
-4. Quando terminar, clique em **Descarregar Ficheiro** no telemóvel.
+1. Abra `/receive/` no telemóvel e clique em **Iniciar câmara**.
+2. Abra `/send/` no computador e escolha o ficheiro.
+3. Aumente o brilho, use fullscreen e aponte o telemóvel para o JAB Code.
+4. Quando terminar, clique em **Descarregar ficheiro** no telemóvel.
 
-Para desligar completamente os dispositivos, clique em **Gerar vídeo offline**
-no emissor. Guarda o ficheiro `.vef.webm`, leva-o para outro dispositivo e
-reproduz o vídeo num ecrã. O telemóvel pode lê-lo com a câmara ou pode carregar
-o vídeo diretamente em **Ler um vídeo guardado sem câmara** no `/receive/`.
-O botão **Copiar link** partilha o endereço da página receiver, não o conteúdo
-do ficheiro.
+O link partilhado abre o receiver; o conteúdo continua a passar apenas pela
+luz do ecrã para a câmara.
 
-O formato de blocos, o cabeçalho, o CRC-32 e a conversão de cores estão em
-`core/protocol.py` e `decoder/static/protocol.js`, para o emissor e o receptor
-usarem exatamente a mesma lógica. O Frame 0 mostra as 64 cores de referência;
-a cada 30 frames aparecem quatro referências em escala de cinzentos para
-recalibrar a câmara. Cada pacote leva os índices dos blocos Fountain que foram
-combinados por XOR, por isso os frames podem chegar fora de ordem e alguns
-podem perder-se.
+O transporte visual usa agora a biblioteca JAB Code real, através da
+build JavaScript de `TMSSassen/JABCodeJS`, em
+`decoder/static/third-party/`. O JAB já fornece finder patterns, paleta,
+correção LDPC e leitura de perspetiva; o VEF-3 coloca por cima o cabeçalho e o
+Fountain stream. O formato do pacote está em `decoder/static/jab-transfer.js`.
+Cada pacote leva os índices dos blocos Fountain que foram combinados por XOR,
+por isso os frames podem chegar fora de ordem e alguns podem perder-se.
 
 ## 📐 Especificações Técnicas
 
 ### O Frame Visual
 
-Cada frame é uma imagem de **800×600 pixéis** com uma grelha de 80×50 = 4000 blocos: 3.836 valores de dados, quatro referências e 160 valores de meta-dados.
+Cada frame é criado pelo **JAB Code**: um símbolo primário com quatro
+finder patterns e, quando necessário, símbolos secundários acoplados. A
+biblioteca escolhe a geometria adequada ao tamanho do pacote, inclui a paleta
+de cores no próprio código e aplica a correção LDPC do formato.
 
-```
-┌────────────────────────────────────────────┐
-│   L verde                         L vermelho│
-│                                            │
-│       80 × 50 tiles de símbolo + cor        │
-│       cada bloco tem 8 × 8 pixéis           │
-│                                            │
-│       L azul                 L amarelo       │
-│       faixa inferior: 160 blocos de meta-dados
-└────────────────────────────────────────────┘
-```
+### Camada Fountain
 
-### Codificação de Cores
-
-Cada tile codifica **6 bits** usando duas camadas:
-- um padrão 4×4 de alto contraste escolhe um de 16 símbolos;
-- uma de 4 cores calibradas acrescenta 2 bits;
-- 16 símbolos × 4 cores = 64 valores por tile;
-- os padrões internos são usados para rejeitar tiles desfocados antes do Fountain Decoder.
-
-### Capacidade
+O VEF-3 coloca um pacote Fountain dentro de cada JAB Code:
 
 | Métrica | Valor |
 |---------|-------|
-| Blocos totais por frame | 4000 |
-| Blocos de dados | 3836 |
-| Bits por bloco | 6 |
-| Payload máximo teórico por frame | 2877 bytes |
-| Pacote Fountain | 2877 bytes (ajustável) |
-| 30 fps (sem overhead) | ~56 KB/s |
-| 60 fps (sem overhead) | ~112 KB/s |
+| JAB symbols por frame | 24 |
+| Cores JAB | 8 |
+| Pacote Fountain | 1024 bytes |
+| 30 fps (taxa nominal) | ~30 KB/s |
+| 60 fps (se o decoder acompanhar) | ~60 KB/s |
+
+A taxa real depende do tempo que o JAB Code demora a ser gerado e lido pela
+câmara. É preferível um stream mais lento que o receiver consiga validar a um
+número teórico que produza frames perdidos.
 
 ### Tempos de Transferência (estimativa)
 

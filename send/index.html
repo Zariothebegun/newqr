@@ -99,70 +99,30 @@
         <nav class="footer-links"><a href="/">Início</a><a href="/receive/">Receiver</a></nav>
     </footer>
 
-    <script src="/static/tile-codec.js?v=tiles-2"></script>
-    <script src="/static/protocol.js?v=tiles-2"></script>
-    <script src="/static/fountain.js?v=tiles-2"></script>
+    <script src="/static/fountain.js?v=jab-1"></script>
+    <script src="/static/jab-transfer.js?v=jab-1"></script>
     <script>
     (() => {
         "use strict";
-        const P = window.VEFProtocol, F = window.VEFFountain;
-        const $ = id => document.getElementById(id);
+        const F = window.VEFFountain, J = window.VEFJab, $ = id => document.getElementById(id);
         const MAX_FILE = 64 * 1024 * 1024, MAX_TEXT = 4 * 1024 * 1024;
-        const CAL_FRAMES = 3;
-        const state = { file: null, data: null, mode: "file", running: false, generation: 0, raf: 0, last: 0, session: 0, encoder: null, seq: 0, k: 0, blockLen: P.FOUNTAIN_BLOCK_SIZE, frame: 0, calLeft: 0 };
-
-        const formatBytes = n => { if (n < 1024) return `${n} B`; let v=n,u=0; const units=["KB","MB","GB"]; while(v>=1024&&u<2){v/=1024;u++;} return `${v.toFixed(v>=10?0:1)} ${units[u]}`; };
-        function status(text, error=false) { $("specs").textContent=text; $("specs").classList.toggle("error",error); }
-        function updateStats() {
-            const fps=Number($("cfg-fps").value), rate=state.blockLen*fps/1024;
-            $("spec-fps").textContent=`${fps} fps · ~${rate.toFixed(1)} KB/s`;
-            $("spec-frame").textContent=state.blockLen ? `${state.blockLen} B` : "—";
-            $("spec-qr").textContent="tiles 16×4 · 64 valores";
-            $("spec-payload").textContent=state.file ? `${state.file.name} · ${formatBytes(state.data.length)}` : "—";
-            $("spec-compression").textContent="Fountain + calibração";
-            $("spec-k").textContent=state.k ? String(state.k) : "—";
-        }
-        function stopStream() {
-            state.generation++; state.running=false; cancelAnimationFrame(state.raf); state.file=null; state.data=null; state.encoder=null; state.k=0; state.seq=0; state.frame=0;
-            $("stage").hidden=true; $("stream-specs").hidden=true; $("footer-hint").hidden=true; $("cfg-file").value="";
-            $("file-picker-button").textContent="Escolher ficheiro"; $("file-picker-label").textContent="Qualquer ficheiro · até 64 MB"; $("pane-file").classList.remove("has-file");
-            status("Escolhe um ficheiro para começar"); updateStats();
-        }
-        function makeSession() { return crypto.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.random()*0xffffffff>>>0; }
-        async function arm(name,type,bytes) {
-            if (!bytes.length) { status("Escolhe um ficheiro não vazio",true); return; }
-            if (bytes.length>MAX_FILE) { status("O ficheiro ultrapassa 64 MB",true); return; }
-            state.file={name,type}; state.data=bytes; state.session=makeSession(); state.blockLen=Math.min(Number($("cfg-bytes").value),P.PAYLOAD_BYTES); state.encoder=new F.FountainEncoder(bytes,state.blockLen,state.session); state.k=state.encoder.k; state.seq=0; state.frame=0; state.calLeft=CAL_FRAMES;
-            $("pane-file").classList.add("has-file"); $("file-picker-button").textContent="Parar transferência"; $("file-picker-label").textContent=`${name} · ${formatBytes(bytes.length)}`;
-            await startStream(true);
-        }
-        async function selectFile(file) { if(!file)return; status(`A preparar ${file.name}…`); arm(file.name,file.type,new Uint8Array(await file.arrayBuffer())); }
-        async function selectText() { const text=$("snippet-text").value; const bytes=new TextEncoder().encode(text); await arm("text.txt","text/plain",bytes); }
-        function drawNext() {
-            const canvas=$("sender-canvas");
-            if(state.calLeft>0) { P.drawCalibrationFrame(canvas); state.calLeft--; }
-            else {
-                const packet=state.encoder.packet(state.seq);
-                const header=P.packHeader({sessionId:state.session,seq:state.seq,k:state.k,blockLen:state.blockLen,totalLen:state.data.length,fileCrc32:P.crc32(state.data),indices:packet.indices,filename:state.file.name});
-                P.drawDataFrame(canvas,packet.data,header,state.seq); state.seq++;
-                if(state.seq%30===0) status("A enviar · recalibração automática"); else status("A enviar · aponta para os tiles");
-            }
-            state.frame++; $("stage").classList.add("qr-active");
-        }
-        function loop(now) { if(!state.running)return; const interval=1000/Number($("cfg-fps").value); if(!state.last||now-state.last>=interval){state.last=now;drawNext();} state.raf=requestAnimationFrame(loop); }
-        async function startStream(reveal=false) {
-            if(!state.data)return; state.generation++; state.running=true; state.last=0; $("stage").hidden=false; $("stream-specs").hidden=false; $("footer-hint").hidden=false; updateStats(); if(reveal) $("stage").scrollIntoView({behavior:"smooth",block:"start"}); state.raf=requestAnimationFrame(loop);
-        }
-        function shareUrl(){ return new URL("/receive/",location.href).href; }
-        async function copyLink(){ const value=$("receiver-link").value; try{await navigator.clipboard.writeText(value);}catch(_){const input=$("receiver-link");input.select();document.execCommand("copy");} $("share-status").textContent="Link copiado."; }
-        async function shareLink(){ if(navigator.share){try{await navigator.share({title:"VEF-3 Receiver",url:shareUrl()});$("share-status").textContent="Link partilhado.";return;}catch(_){}} await copyLink(); }
-        $("cfg-file").addEventListener("change",e=>selectFile(e.target.files[0]));
-        $("pane-file").addEventListener("click",e=>{if($("pane-file").classList.contains("has-file")){e.preventDefault();stopStream();}});
-        document.querySelectorAll('input[name="send-mode"]').forEach(input=>input.addEventListener("change",e=>{state.mode=e.target.value; const snippet=state.mode==="snippet"; $("pane-file").hidden=snippet; $("pane-snippet").hidden=!snippet; $("tool-title").textContent=snippet?"Enviar texto":"Enviar um ficheiro"; if(state.running)stopStream(); status(snippet?"Escreve texto para começar":"Escolhe um ficheiro para começar");}));
-        $("send-snippet").addEventListener("click",selectText); $("cfg-fps").addEventListener("change",updateStats); $("cfg-bytes").addEventListener("change",()=>{if(state.file)arm(state.file.name,state.file.type,state.data);});
-        $("sender-canvas").addEventListener("click",()=>document.body.classList.toggle("qr-full")); $("receiver-link").value=shareUrl(); $("copy-link-btn").addEventListener("click",copyLink); $("share-link-btn").addEventListener("click",shareLink); $("share-close-btn").addEventListener("click",()=>$("share-dialog").close());
-        $("specs").addEventListener("click",()=>{if(state.running)$("share-dialog").showModal();});
-        updateStats();
+        const state = { file:null, data:null, mode:"file", running:false, busy:false, raf:0, last:0, session:0, encoder:null, k:0, seq:0, blockLen:1024 };
+        const formatBytes = n => { if(n<1024)return `${n} B`; let v=n,u=0; const units=["KB","MB","GB"];while(v>=1024&&u<2){v/=1024;u++;}return `${v.toFixed(v>=10?0:1)} ${units[u]}`; };
+        function status(text,error=false){$("specs").textContent=text;$("specs").classList.toggle("error",error);}
+        function updateStats(){const fps=Number($("cfg-fps").value),rate=state.blockLen*fps/1024;$("spec-fps").textContent=`${fps} fps · ~${rate.toFixed(1)} KB/s`;$("spec-frame").textContent=state.blockLen?`${state.blockLen} B`:"—";$("spec-qr").textContent="JAB Code · 8 cores";$("spec-payload").textContent=state.file?`${state.file.name} · ${formatBytes(state.data.length)}`:"—";$("spec-compression").textContent="JAB LDPC + Fountain";$("spec-k").textContent=state.k?String(state.k):"—";}
+        function stopStream(){state.running=false;state.busy=false;cancelAnimationFrame(state.raf);state.file=null;state.data=null;state.encoder=null;state.k=0;state.seq=0;$("stage").hidden=true;$("stream-specs").hidden=true;$("footer-hint").hidden=true;$("cfg-file").value="";$("file-picker-button").textContent="Escolher ficheiro";$("file-picker-label").textContent="Qualquer ficheiro · até 64 MB";$("pane-file").classList.remove("has-file");status("Escolhe um ficheiro para começar");updateStats();}
+        function session(){return crypto.getRandomValues?crypto.getRandomValues(new Uint32Array(1))[0]:Math.random()*0xffffffff>>>0;}
+        async function arm(name,type,bytes){if(!bytes.length){status("Escolhe um ficheiro não vazio",true);return;}if(bytes.length>MAX_FILE){status("O ficheiro ultrapassa 64 MB",true);return;}state.file={name,type};state.data=bytes;state.session=session();state.blockLen=Math.min(Number($("cfg-bytes").value),1024);state.encoder=new F.FountainEncoder(bytes,state.blockLen,state.session);state.k=state.encoder.k;state.seq=0;$("pane-file").classList.add("has-file");$("file-picker-button").textContent="Parar transferência";$("file-picker-label").textContent=`${name} · ${formatBytes(bytes.length)}`;await startStream(true);}
+        async function selectFile(file){if(!file)return;status(`A preparar ${file.name}…`);await arm(file.name,file.type,new Uint8Array(await file.arrayBuffer()));}
+        async function selectText(){const bytes=new TextEncoder().encode($("snippet-text").value);if(bytes.length>MAX_TEXT){status("O texto ultrapassa 4 MB",true);return;}await arm("text.txt","text/plain",bytes);}
+        function loadImage(uri){return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=reject;image.src=uri;});}
+        async function drawNext(){const packet=state.encoder.packet(state.seq);status(`JAB Code · a gerar frame ${state.seq}…`);const uri=await J.encodePacket({sessionId:state.session,seq:state.seq,k:state.k,blockLen:state.blockLen,totalLen:state.data.length,fileCrc32:J.crc32(state.data),indices:packet.indices,filename:state.file.name,data:packet.data});const image=await loadImage(uri);const canvas=$("sender-canvas"),ctx=canvas.getContext("2d");canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;ctx.imageSmoothingEnabled=false;ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0);state.seq++;state.busy=false;$("stage").hidden=false;$("stage").classList.add("qr-active");$("stream-specs").hidden=false;$("footer-hint").hidden=false;updateStats();}
+        async function loop(now){if(!state.running)return;const interval=1000/Number($("cfg-fps").value);if(!state.busy&&(!state.last||now-state.last>=interval)){state.last=now;state.busy=true;try{await drawNext();}catch(error){status(`Erro JAB Code: ${error.message||error}`,true);state.busy=false;}}state.raf=requestAnimationFrame(loop);}
+        async function startStream(reveal=false){if(!state.data)return;state.running=true;state.last=0;$("stage").hidden=false;$("stream-specs").hidden=false;$("footer-hint").hidden=false;updateStats();if(reveal)$("stage").scrollIntoView({behavior:"smooth",block:"start"});state.raf=requestAnimationFrame(loop);}
+        function shareUrl(){return new URL("/receive/",location.href).href;}
+        async function copyLink(){try{await navigator.clipboard.writeText($("receiver-link").value);}catch(_){const i=$("receiver-link");i.select();document.execCommand("copy");}$("share-status").textContent="Link copiado.";}
+        async function shareLink(){if(navigator.share){try{await navigator.share({title:"VEF-3 Receiver",url:shareUrl()});$("share-status").textContent="Link partilhado.";return;}catch(_){}}await copyLink();}
+        $("cfg-file").addEventListener("change",e=>selectFile(e.target.files[0]));$("pane-file").addEventListener("click",e=>{if($("pane-file").classList.contains("has-file")){e.preventDefault();stopStream();}});document.querySelectorAll('input[name="send-mode"]').forEach(input=>input.addEventListener("change",e=>{const snippet=e.target.value==="snippet";$("pane-file").hidden=snippet;$("pane-snippet").hidden=!snippet;$("tool-title").textContent=snippet?"Enviar texto":"Enviar um ficheiro";if(state.running)stopStream();status(snippet?"Escreve texto para começar":"Escolhe um ficheiro para começar");}));$("send-snippet").addEventListener("click",selectText);$("cfg-fps").addEventListener("change",updateStats);$("cfg-bytes").addEventListener("change",()=>{if(state.file)arm(state.file.name,state.file.type,state.data);});$("sender-canvas").addEventListener("click",()=>document.body.classList.toggle("qr-full"));$("receiver-link").value=shareUrl();$("copy-link-btn").addEventListener("click",copyLink);$("share-link-btn").addEventListener("click",shareLink);$("share-close-btn").addEventListener("click",()=>$("share-dialog").close());$("specs").addEventListener("click",()=>{if(state.running)$("share-dialog").showModal();});updateStats();
     })();
     </script>
 </body>
