@@ -7,6 +7,8 @@
     const state = {
         cameraActive: false,
         stream: null,
+        sourceUrl: null,
+        sourceMode: null,
         animationFrame: null,
         canvasContext: null,
         frameCount: 0,
@@ -20,6 +22,7 @@
         transfer: null,
         fileData: null,
         fileName: "received_file",
+        selectedVideo: null,
         debug: false,
         processing: false
     };
@@ -184,6 +187,15 @@
         $("progress-text").textContent = total ? `${received} blocos recebidos` : "Aguardando blocos…";
     }
 
+    function clearTransfer() {
+        state.transfer = null;
+        state.fileData = null;
+        state.fileName = "received_file";
+        state.validFrames = 0;
+        $("download-btn").classList.add("hidden");
+        updateProgress();
+    }
+
     function finishTransfer() {
         const transfer = state.transfer;
         if (!transfer || transfer.completed || transfer.packets.size < transfer.totalPackets) return;
@@ -282,7 +294,62 @@
         state.animationFrame = requestAnimationFrame(processLoop);
     }
 
+    function activateReadingUi(statusText) {
+        state.cameraActive = true;
+        state.frameCount = 0;
+        state.framesSinceFps = 0;
+        state.lastFpsAt = 0;
+        state.calibrator = null;
+        clearTransfer();
+        $("video").classList.remove("hidden");
+        $("start-btn").classList.add("hidden");
+        $("stop-btn").classList.remove("hidden");
+        $("overlay").classList.remove("hidden");
+        $("frame-info").classList.remove("hidden");
+        $("calibration-indicator").classList.remove("hidden");
+        updateStatus(statusText, "success");
+        state.animationFrame = requestAnimationFrame(processLoop);
+    }
+
+    async function startVideoFile(file) {
+        if (!file) return;
+        if (state.stream) state.stream.getTracks().forEach(track => track.stop());
+        cancelAnimationFrame(state.animationFrame);
+        if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
+
+        const video = $("video");
+        state.stream = null;
+        state.sourceUrl = URL.createObjectURL(file);
+        state.sourceMode = "file";
+        video.srcObject = null;
+        video.src = state.sourceUrl;
+        video.controls = true;
+        video.muted = true;
+        video.loop = false;
+        try {
+            await video.play();
+            activateReadingUi("A ler vídeo guardado");
+            showMessage("A ler os blocos do vídeo neste dispositivo", "info");
+        } catch (error) {
+            log(`Video error: ${error.message}`);
+            showMessage("Não foi possível reproduzir este vídeo neste navegador.", "error", true);
+        }
+    }
+
     async function startCamera() {
+        state.cameraActive = false;
+        cancelAnimationFrame(state.animationFrame);
+        if (state.stream) state.stream.getTracks().forEach(track => track.stop());
+        state.stream = null;
+        if (state.sourceUrl) {
+            URL.revokeObjectURL(state.sourceUrl);
+            state.sourceUrl = null;
+        }
+        state.sourceMode = "camera";
+        const previousVideo = $("video");
+        previousVideo.removeAttribute("src");
+        previousVideo.load();
+        previousVideo.controls = false;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             showMessage("Este navegador não permite acesso à câmara", "error", true);
             return;
@@ -295,19 +362,8 @@
             const video = $("video");
             video.srcObject = state.stream;
             await video.play();
-            state.cameraActive = true;
-            state.frameCount = 0;
-            state.framesSinceFps = 0;
-            state.lastFpsAt = 0;
-            state.calibrator = null;
-            $("start-btn").classList.add("hidden");
-            $("stop-btn").classList.remove("hidden");
-            $("overlay").classList.remove("hidden");
-            $("frame-info").classList.remove("hidden");
-            $("calibration-indicator").classList.remove("hidden");
-            updateStatus("Câmara ativa", "success");
+            activateReadingUi("Câmara ativa");
             showMessage("Aponta para o ecrã dos blocos", "info");
-            state.animationFrame = requestAnimationFrame(processLoop);
         } catch (error) {
             log(`Camera error: ${error.message}`);
             showMessage("Não foi possível abrir a câmara. Verifica as permissões.", "error", true);
@@ -320,7 +376,13 @@
         state.stream = null;
         state.cameraActive = false;
         cancelAnimationFrame(state.animationFrame);
+        if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
+        state.sourceUrl = null;
+        state.sourceMode = null;
         $("video").srcObject = null;
+        $("video").removeAttribute("src");
+        $("video").load();
+        $("video").controls = false;
         $("video").classList.add("hidden");
         $("start-btn").classList.remove("hidden");
         $("stop-btn").classList.add("hidden");
@@ -343,13 +405,8 @@
     }
 
     function retry() {
-        state.transfer = null;
-        state.fileData = null;
-        state.fileName = "received_file";
-        state.validFrames = 0;
-        $("download-btn").classList.add("hidden");
+        clearTransfer();
         updateStatus(state.cameraActive ? "A procurar transferência" : "Pronto");
-        updateProgress();
     }
 
     window.toggleTheme = () => {
@@ -361,6 +418,18 @@
     $("stop-btn").addEventListener("click", stopCamera);
     $("download-btn").addEventListener("click", downloadFile);
     $("retry-btn").addEventListener("click", retry);
+    $("video-file-input").addEventListener("change", event => {
+        state.selectedVideo = event.target.files[0] || null;
+        $("read-video-btn").disabled = !state.selectedVideo;
+    });
+    $("read-video-btn").addEventListener("click", () => startVideoFile(state.selectedVideo));
+    $("video").addEventListener("ended", () => {
+        if (state.sourceMode === "file") {
+            state.cameraActive = false;
+            cancelAnimationFrame(state.animationFrame);
+            updateStatus(state.transfer && state.transfer.completed ? "Vídeo lido" : "Vídeo terminou", state.transfer && state.transfer.completed ? "success" : "error");
+        }
+    });
     updateProgress();
     log("Receiver pronto");
 })();

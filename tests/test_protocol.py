@@ -33,6 +33,23 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(parsed["total_packets"], 42)
         self.assertEqual(parsed["filename"], "a useful filename.pdf")
 
+    def test_hello_file_transfer_round_trip(self):
+        data = b"hello"
+        header = pack_header(
+            file_id=7,
+            packet_index=0,
+            total_packets=1,
+            original_size=len(data),
+            payload_length=len(data),
+            file_crc32=crc32(data),
+            filename="hello.txt",
+        )
+        decoded_header = unpack_header(header)
+        encoded_payload = bytes_to_values(data, 3680)
+        decoded_payload = values_to_bytes(encoded_payload, decoded_header["payload_length"])
+        self.assertEqual(decoded_payload, data)
+        self.assertEqual(crc32(decoded_payload), decoded_header["file_crc32"])
+
     def test_calibration_header_is_identifiable(self):
         header = pack_header(
             file_id=0,

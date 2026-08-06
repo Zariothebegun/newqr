@@ -224,6 +224,18 @@
             border: 2px solid var(--primary);
         }
 
+        .video-reader {
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        .video-reader input { width: 100%; margin: 8px 0; }
+
         .instructions {
             background: var(--bg-card);
             border-radius: 12px;
@@ -343,6 +355,11 @@
 
         <button id="start-btn" class="btn btn-primary">📷 Iniciar Câmara</button>
         <button id="stop-btn" class="btn btn-secondary hidden">⏹ Parar</button>
+        <div class="video-reader">
+            <strong>📼 Ler um vídeo guardado sem câmara</strong>
+            <input id="video-file-input" type="file" accept="video/*">
+            <button id="read-video-btn" class="btn btn-secondary" disabled>▶ Ler vídeo</button>
+        </div>
         <button id="download-btn" class="btn btn-primary hidden">💾 Descarregar Ficheiro</button>
         <button id="retry-btn" class="btn btn-secondary hidden">🔄 Tentar Novamente</button>
 
@@ -351,7 +368,7 @@
             <ul>
                 <li>Carrega em "Iniciar Câmara" para começar</li>
                 <li>No computador, abre <a href="/send/">Enviar ficheiro</a> e escolhe o ficheiro</li>
-                <li>Aponta para o ecrã a mostrar os blocos VEF-3</li>
+                <li>Aponta para o ecrã a mostrar os blocos VEF-3, ou lê um vídeo guardado acima</li>
                 <li>Mantém firme - usa um suporte se possível</li>
                 <li>Brilho máximo no ecrã do computador</li>
                 <li>Evita reflexos e luz solar direta</li>

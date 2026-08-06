@@ -52,10 +52,11 @@
         .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
         .file-size { color: var(--muted); font-size: .85rem; }
         label { display: block; color: var(--muted); font-size: .85rem; margin: 18px 0 6px; }
-        select, button {
+        select, input[type="url"], button {
             width: 100%; border-radius: 10px; border: 1px solid var(--line); padding: 11px 13px;
             background: var(--panel-2); color: var(--text); font: inherit;
         }
+        input[type="url"] { margin-top: 12px; color: var(--muted); }
         button { cursor: pointer; font-weight: 700; }
         button:hover:not(:disabled) { border-color: var(--accent); }
         button:disabled { opacity: .45; cursor: not-allowed; }
@@ -130,6 +131,7 @@
                         <div id="file-name" class="file-name"></div>
                         <div id="file-size" class="file-size"></div>
                     </div>
+                    <button id="hello-btn" class="secondary">🧪 Criar teste "hello.txt"</button>
 
                     <label for="fps">Velocidade dos blocos</label>
                     <select id="fps">
@@ -141,10 +143,22 @@
                     </select>
 
                     <button id="start-btn" class="primary" disabled>▶ Iniciar transferência</button>
+                    <button id="video-btn" class="secondary" disabled>🎞 Gerar vídeo offline</button>
                     <button id="pause-btn" class="secondary" disabled>Ⅱ Pausar</button>
                     <button id="fullscreen-btn" class="secondary" disabled>⛶ Ecrã inteiro</button>
                     <button id="reset-btn" class="secondary danger">Limpar ficheiro</button>
-                    <p class="note">Dica: aumenta o brilho, abre o ecrã inteiro e aponta a câmara para os blocos. Mantém o telemóvel imóvel.</p>
+                    <p class="note">O vídeo é gerado neste dispositivo. Guarda-o e reproduz noutro ecrã; os dispositivos não precisam de estar ligados entre si.</p>
+                </div>
+
+                <div class="panel share-panel">
+                    <h2 style="font-size: 1.05rem;">🔗 Partilhar o receptor</h2>
+                    <p class="note">Envia este link para a outra pessoa abrir a página que lê os blocos.</p>
+                    <input id="receiver-link" type="url" readonly>
+                    <div class="screen-controls">
+                        <button id="copy-link-btn" class="secondary">Copiar link</button>
+                        <button id="share-link-btn" class="secondary">Partilhar…</button>
+                    </div>
+                    <div id="share-status" class="muted" style="margin-top: 8px;"></div>
                 </div>
 
                 <div class="panel how">
@@ -196,6 +210,7 @@
                 calibrationLeft: 0,
                 frameNumber: 0,
                 running: false,
+                generating: false,
                 animationFrame: null,
                 lastDraw: 0,
                 cycle: 0
@@ -223,6 +238,11 @@
                 $("progress-bar").style.width = state.totalPackets ? `${(state.packetIndex / state.totalPackets) * 100}%` : "0";
             }
 
+            function createHelloFile() {
+                const file = new File([new TextEncoder().encode("hello")], "hello.txt", { type: "text/plain" });
+                chooseFile(file);
+            }
+
             function chooseFile(file) {
                 if (!file) return;
                 if (file.size > MAX_FILE_SIZE) {
@@ -244,6 +264,7 @@
                     $("file-size").textContent = `${formatBytes(file.size)} · CRC ${state.fileCrc32.toString(16).padStart(8, "0")}`;
                     $("file-card").classList.add("visible");
                     $("start-btn").disabled = false;
+                    $("video-btn").disabled = false;
                     $("fullscreen-btn").disabled = false;
                     setStatus("Pronto para iniciar");
                     updateStats();
@@ -295,8 +316,133 @@
                 state.animationFrame = requestAnimationFrame(animationLoop);
             }
 
+            function sleep(milliseconds) {
+                return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+            }
+
+            function recordingMimeType() {
+                if (!window.MediaRecorder) return "";
+                const choices = [
+                    "video/webm;codecs=vp9",
+                    "video/webm;codecs=vp8",
+                    "video/webm",
+                    "video/mp4"
+                ];
+                return choices.find(type => MediaRecorder.isTypeSupported(type)) || "";
+            }
+
+            async function generateVideo() {
+                if (!state.data || state.generating) return;
+                if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+                    setStatus("Este navegador não consegue gravar vídeo offline", true);
+                    return;
+                }
+
+                const mimeType = recordingMimeType();
+                if (!mimeType) {
+                    setStatus("Formato de vídeo não suportado neste navegador", true);
+                    return;
+                }
+
+                cancelAnimationFrame(state.animationFrame);
+                state.running = false;
+                state.generating = true;
+                state.packetIndex = 0;
+                state.calibrationLeft = CALIBRATION_FRAMES;
+                state.frameNumber = 0;
+                state.cycle = 0;
+                $("start-btn").disabled = true;
+                $("pause-btn").disabled = true;
+                $("video-btn").disabled = true;
+                $("reset-btn").disabled = true;
+                $("video-btn").textContent = "⏳ A gerar vídeo…";
+
+                const fps = Number($("fps").value);
+                const canvas = $("sender-canvas");
+                P.drawCalibrationFrame(canvas);
+                const stream = canvas.captureStream(fps);
+                const recorder = new MediaRecorder(stream, {
+                    mimeType,
+                    videoBitsPerSecond: 8_000_000
+                });
+                const chunks = [];
+                const stopped = new Promise(resolve => {
+                    recorder.addEventListener("stop", resolve, { once: true });
+                });
+                recorder.addEventListener("dataavailable", event => {
+                    if (event.data && event.data.size) chunks.push(event.data);
+                });
+
+                try {
+                    recorder.start(1000);
+                    // Two passes make a saved video useful even when the
+                    // receiver misses a frame during playback.
+                    const framesToGenerate = (CALIBRATION_FRAMES + state.totalPackets) * 2;
+                    for (let frame = 0; frame < framesToGenerate; frame++) {
+                        drawNextFrame();
+                        const track = stream.getVideoTracks()[0];
+                        if (track && track.requestFrame) track.requestFrame();
+                        setStatus(`A gerar vídeo · ${frame + 1} / ${framesToGenerate}`);
+                        await sleep(1000 / fps);
+                    }
+                    recorder.stop();
+                    await stopped;
+                    const extension = mimeType.includes("mp4") ? "mp4" : "webm";
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = `${state.file.name.replace(/\\.[^.]*$/, "")}.vef.${extension}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+                    setStatus(`Vídeo criado (${formatBytes(blob.size)})`);
+                } catch (error) {
+                    if (recorder.state !== "inactive") recorder.stop();
+                    setStatus(`Erro ao gerar vídeo: ${error.message}`, true);
+                } finally {
+                    stream.getTracks().forEach(track => track.stop());
+                    state.generating = false;
+                    $("start-btn").disabled = false;
+                    $("video-btn").disabled = false;
+                    $("reset-btn").disabled = false;
+                    $("video-btn").textContent = "🎞 Gerar vídeo offline";
+                    updateStats();
+                }
+            }
+
+            function receiverUrl() {
+                return new URL("/receive/", window.location.href).href;
+            }
+
+            async function copyReceiverLink() {
+                const input = $("receiver-link");
+                try {
+                    await navigator.clipboard.writeText(input.value);
+                    $("share-status").textContent = "Link copiado.";
+                } catch (_) {
+                    input.focus();
+                    input.select();
+                    document.execCommand("copy");
+                    $("share-status").textContent = "Link copiado.";
+                }
+            }
+
+            async function shareReceiverLink() {
+                const url = receiverUrl();
+                if (navigator.share) {
+                    try {
+                        await navigator.share({ title: "VEF-3 Receiver", text: "Abrir para ler os blocos VEF-3", url });
+                        $("share-status").textContent = "Link partilhado.";
+                        return;
+                    } catch (_) {}
+                }
+                await copyReceiverLink();
+            }
+
             function start() {
-                if (!state.data) return;
+                if (!state.data || state.generating) return;
                 state.running = true;
                 state.lastDraw = 0;
                 $("start-btn").disabled = true;
@@ -332,8 +478,10 @@
                 $("file-input").value = "";
                 $("file-card").classList.remove("visible");
                 $("start-btn").disabled = true;
+                $("video-btn").disabled = true;
                 $("pause-btn").disabled = true;
                 $("fullscreen-btn").disabled = true;
+                $("reset-btn").disabled = false;
                 $("screen").classList.remove("sending");
                 $("pause-btn").textContent = "Ⅱ Pausar";
                 setStatus("Escolhe um ficheiro para começar");
@@ -341,10 +489,15 @@
             }
 
             $("file-input").addEventListener("change", event => chooseFile(event.target.files[0]));
+            $("hello-btn").addEventListener("click", createHelloFile);
             $("start-btn").addEventListener("click", start);
+            $("video-btn").addEventListener("click", generateVideo);
             $("pause-btn").addEventListener("click", pause);
             $("reset-btn").addEventListener("click", reset);
+            $("copy-link-btn").addEventListener("click", copyReceiverLink);
+            $("share-link-btn").addEventListener("click", shareReceiverLink);
             $("fps").addEventListener("change", updateStats);
+            $("receiver-link").value = receiverUrl();
             $("fullscreen-btn").addEventListener("click", async () => {
                 document.body.classList.add("fullscreen-mode");
                 if (document.documentElement.requestFullscreen) {

@@ -93,6 +93,13 @@ servidor. O emissor repete os blocos até o receptor chegar a 100%. Para usar:
 3. Aumente o brilho, use **Ecrã inteiro** e aponte o telemóvel para os blocos.
 4. Quando terminar, clique em **Descarregar Ficheiro** no telemóvel.
 
+Para desligar completamente os dispositivos, clique em **Gerar vídeo offline**
+no emissor. Guarda o ficheiro `.vef.webm`, leva-o para outro dispositivo e
+reproduz o vídeo num ecrã. O telemóvel pode lê-lo com a câmara ou pode carregar
+o vídeo diretamente em **Ler um vídeo guardado sem câmara** no `/receive/`.
+O botão **Copiar link** partilha o endereço da página receiver, não o conteúdo
+do ficheiro.
+
 O formato de blocos, o cabeçalho, o CRC-32 e a conversão de cores estão em
 `core/protocol.py` e `decoder/static/protocol.js`, para o emissor e o receptor
 usarem exatamente a mesma lógica.
