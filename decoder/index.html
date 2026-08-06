@@ -1,20 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VEF-3 Decoder - Visual File Transfer</title>
+    <title>VEF-3 Decoder - Transferência Visual</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         
         :root {
             --primary: #00ff88;
             --primary-dark: #00cc6a;
-            --secondary: #ff6b6b;
             --bg-dark: #0a0a0f;
             --bg-card: #151520;
             --text: #ffffff;
@@ -22,6 +17,7 @@
             --success: #00ff88;
             --warning: #ffaa00;
             --error: #ff4444;
+            --info: #00aaff;
         }
         
         body {
@@ -29,37 +25,22 @@
             background: var(--bg-dark);
             color: var(--text);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
+            padding: 15px;
         }
         
-        .container {
-            width: 100%;
-            max-width: 600px;
-        }
+        .container { max-width: 600px; margin: 0 auto; }
         
-        header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
+        header { text-align: center; margin-bottom: 20px; }
         
         h1 {
-            font-size: 1.8rem;
-            margin-bottom: 5px;
-            background: linear-gradient(135deg, var(--primary), #00aaff);
+            font-size: 1.6rem;
+            background: linear-gradient(135deg, var(--primary), var(--info));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
         
-        .subtitle {
-            color: var(--text-dim);
-            font-size: 0.9rem;
-        }
-        
-        .status-bar {
+        .status-panel {
             background: var(--bg-card);
             border-radius: 12px;
             padding: 15px;
@@ -67,31 +48,25 @@
             border: 1px solid #333;
         }
         
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
         .status-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #222;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
         }
         
-        .status-item:last-child {
-            border-bottom: none;
-        }
-        
-        .status-label {
-            color: var(--text-dim);
-        }
-        
-        .status-value {
-            font-weight: 600;
-            font-family: monospace;
-        }
-        
+        .status-label { font-size: 0.75rem; color: var(--text-dim); }
+        .status-value { font-size: 1rem; font-weight: 600; font-family: monospace; }
         .status-value.success { color: var(--success); }
         .status-value.warning { color: var(--warning); }
         .status-value.error { color: var(--error); }
         
-        .progress-container {
+        .progress-section {
             background: var(--bg-card);
             border-radius: 12px;
             padding: 20px;
@@ -108,19 +83,30 @@
         .progress-bar-bg {
             background: #222;
             border-radius: 8px;
-            height: 20px;
+            height: 24px;
             overflow: hidden;
+            position: relative;
         }
         
         .progress-bar {
-            background: linear-gradient(90deg, var(--primary), #00aaff);
+            background: linear-gradient(90deg, var(--primary), var(--info));
             height: 100%;
             width: 0%;
             transition: width 0.3s ease;
             border-radius: 8px;
         }
         
-        .preview-container {
+        .progress-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .preview {
             background: var(--bg-card);
             border-radius: 12px;
             padding: 15px;
@@ -128,44 +114,19 @@
             border: 1px solid #333;
         }
         
-        .camera-preview {
+        .camera-container {
             width: 100%;
             aspect-ratio: 16/10;
             background: #000;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             overflow: hidden;
             position: relative;
         }
         
-        .camera-preview video,
-        .camera-preview canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
+        .camera-container video,
+        .camera-container canvas { width: 100%; height: 100%; object-fit: contain; }
         
-        .overlay-info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.75rem;
-            color: rgba(255,255,255,0.7);
-            pointer-events: none;
-        }
-        
-        .frame-indicator {
-            background: rgba(0,0,0,0.6);
-            padding: 3px 8px;
-            border-radius: 4px;
-        }
-        
-        .corner-markers {
+        .overlay {
             position: absolute;
             inset: 0;
             pointer-events: none;
@@ -173,26 +134,79 @@
         
         .corner-marker {
             position: absolute;
-            width: 20px;
-            height: 20px;
+            width: 25px;
+            height: 25px;
             border: 3px solid;
+            border-radius: 4px;
         }
         
-        .corner-marker.tl { top: 5%; left: 5%; border-color: #00ff00; border-radius: 4px 0 0 0; }
-        .corner-marker.tr { top: 5%; right: 5%; border-color: #ff0000; border-radius: 0 4px 0 0; }
-        .corner-marker.bl { bottom: 5%; left: 5%; border-color: #0000ff; border-radius: 0 0 0 4px; }
-        .corner-marker.br { bottom: 5%; right: 5%; border-color: #ffff00; border-radius: 0 0 4px 0; }
+        .corner-marker.tl { top: 3%; left: 3%; border-color: #00ff00; }
+        .corner-marker.tr { top: 3%; right: 3%; border-color: #ff0000; }
+        .corner-marker.bl { bottom: 3%; left: 3%; border-color: #0000ff; }
+        .corner-marker.br { bottom: 3%; right: 3%; border-color: #ffff00; }
+        
+        .corner-marker.detected { animation: pulse 0.5s ease; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .frame-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .frame-info span {
+            background: rgba(0,0,0,0.6);
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        
+        .calibration-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+        
+        .calibration-indicator.low { color: var(--error); }
+        .calibration-indicator.medium { color: var(--warning); }
+        .calibration-indicator.high { color: var(--success); }
+        
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .message.info { background: rgba(0,170,255,0.2); border: 1px solid var(--info); }
+        .message.success { background: rgba(0,255,136,0.2); border: 1px solid var(--success); }
+        .message.error { background: rgba(255,68,68,0.2); border: 1px solid var(--error); }
+        .message.warning { background: rgba(255,170,0,0.2); border: 1px solid var(--warning); }
         
         .btn {
             width: 100%;
-            padding: 15px 30px;
-            font-size: 1.1rem;
+            padding: 15px;
+            font-size: 1rem;
             font-weight: 600;
             border: none;
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
             margin-bottom: 10px;
+            transition: all 0.2s;
         }
         
         .btn-primary {
@@ -200,25 +214,14 @@
             color: #000;
         }
         
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
-        }
-        
-        .btn-primary:active {
-            transform: translateY(0);
-        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,255,136,0.3); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
         
         .btn-secondary {
             background: var(--bg-card);
             color: var(--text);
             border: 2px solid var(--primary);
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
         }
         
         .instructions {
@@ -229,810 +232,839 @@
             border: 1px solid #333;
         }
         
-        .instructions h3 {
-            margin-bottom: 10px;
-            color: var(--primary);
-        }
+        .instructions h3 { margin-bottom: 10px; color: var(--primary); }
         
         .instructions ul {
             list-style: none;
-            padding: 0;
+            font-size: 0.9rem;
+            color: var(--text-dim);
         }
         
         .instructions li {
             padding: 5px 0;
             padding-left: 20px;
             position: relative;
-            color: var(--text-dim);
-            font-size: 0.9rem;
         }
         
-        .instructions li::before {
-            content: "▸";
-            position: absolute;
-            left: 0;
-            color: var(--primary);
-        }
+        .instructions li::before { content: "▸"; position: absolute; left: 0; color: var(--primary); }
         
-        .message {
+        .debug-panel {
+            background: var(--bg-card);
+            border-radius: 12px;
             padding: 15px;
-            border-radius: 8px;
             margin-bottom: 15px;
-            text-align: center;
-            font-weight: 500;
-        }
-        
-        .message.info {
-            background: rgba(0, 170, 255, 0.2);
-            border: 1px solid #00aaff;
-        }
-        
-        .message.success {
-            background: rgba(0, 255, 136, 0.2);
-            border: 1px solid var(--success);
-        }
-        
-        .message.error {
-            background: rgba(255, 68, 68, 0.2);
-            border: 1px solid var(--error);
-        }
-        
-        .message.warning {
-            background: rgba(255, 170, 0, 0.2);
-            border: 1px solid var(--warning);
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        .calibration-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 2px;
-            margin-top: 15px;
-            background: #000;
-            padding: 5px;
-            border-radius: 8px;
-        }
-        
-        .calibration-color {
-            aspect-ratio: 1;
-            border-radius: 2px;
-        }
-        
-        .debug-info {
+            border: 1px solid #333;
             font-family: monospace;
-            font-size: 0.75rem;
-            color: var(--text-dim);
-            background: #000;
-            padding: 10px;
-            border-radius: 8px;
-            max-height: 100px;
+            font-size: 0.7rem;
+            max-height: 150px;
             overflow-y: auto;
-            margin-top: 10px;
+            color: var(--text-dim);
         }
         
-        @media (max-width: 480px) {
-            body {
-                padding: 10px;
-            }
-            
-            h1 {
-                font-size: 1.5rem;
-            }
+        .hidden { display: none !important; }
+        
+        /* Dark mode toggle */
+        .theme-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            background: var(--bg-card);
+            border: 1px solid #333;
+            border-radius: 20px;
+            padding: 8px 15px;
+            font-size: 0.8rem;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+    
     <div class="container">
         <header>
-            <h1>VEF-3 Decoder</h1>
-            <p class="subtitle">Visual File Transfer via Camera</p>
+            <h1>🔄 VEF-3 Decoder</h1>
+            <p style="color: var(--text-dim); font-size: 0.85rem;">Transferência Visual de Ficheiros</p>
         </header>
         
         <div id="message" class="message info hidden"></div>
         
-        <div class="status-bar">
-            <div class="status-item">
-                <span class="status-label">Status</span>
-                <span id="status" class="status-value">Ready</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Frames Detected</span>
-                <span id="frames-count" class="status-value">0</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Packets Received</span>
-                <span id="packets-count" class="status-value">0 / 0</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Blocks Decoded</span>
-                <span id="blocks-progress" class="status-value">0%</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">Calibration</span>
-                <span id="calibration-status" class="status-value warning">Not Calibrated</span>
+        <div class="status-panel">
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-label">Estado</div>
+                    <div id="status" class="status-value">Pronto</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Frames</div>
+                    <div id="frames-count" class="status-value">0</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Pacotes</div>
+                    <div id="packets-count" class="status-value">0 / 0</div>
+                </div>
+                <div class="status-item">
+                    <div class="status-label">Calibração</div>
+                    <div id="calibration" class="status-value warning">Não calibrado</div>
+                </div>
             </div>
         </div>
         
-        <div class="progress-container">
+        <div class="progress-section">
             <div class="progress-header">
-                <span>Transfer Progress</span>
+                <span>Progresso da Transferência</span>
                 <span id="progress-percent">0%</span>
             </div>
             <div class="progress-bar-bg">
                 <div id="progress-bar" class="progress-bar"></div>
+                <div class="progress-text" id="progress-text">Aguardando...</div>
             </div>
         </div>
         
-        <div class="preview-container">
-            <div id="camera-preview" class="camera-preview">
+        <div class="preview">
+            <div class="camera-container">
                 <video id="video" autoplay playsinline></video>
                 <canvas id="canvas" class="hidden"></canvas>
-                <div id="overlay-info" class="overlay-info hidden">
-                    <span id="frame-id" class="frame-indicator">Frame: -</span>
-                    <span id="fps-display">FPS: 0</span>
+                <div id="overlay" class="overlay hidden">
+                    <div id="corner-tl" class="corner-marker tl"></div>
+                    <div id="corner-tr" class="corner-marker tr"></div>
+                    <div id="corner-bl" class="corner-marker bl"></div>
+                    <div id="corner-br" class="corner-marker br"></div>
                 </div>
-                <div id="corner-markers" class="corner-markers hidden">
-                    <div class="corner-marker tl"></div>
-                    <div class="corner-marker tr"></div>
-                    <div class="corner-marker bl"></div>
-                    <div class="corner-marker br"></div>
+                <div id="frame-info" class="frame-info hidden">
+                    <span id="frame-id">Frame: -</span>
+                    <span id="fps">FPS: 0</span>
+                </div>
+                <div id="calibration-indicator" class="calibration-indicator hidden">
+                    Calibração: <span id="calibration-value">0%</span>
                 </div>
             </div>
         </div>
         
+        <button id="start-btn" class="btn btn-primary">📷 Iniciar Câmara</button>
+        <button id="stop-btn" class="btn btn-secondary hidden">⏹ Parar</button>
+        <button id="download-btn" class="btn btn-primary hidden">💾 Descarregar Ficheiro</button>
+        <button id="retry-btn" class="btn btn-secondary hidden">🔄 Tentar Novamente</button>
+        
         <div class="instructions">
-            <h3>📱 Instructions</h3>
+            <h3>📱 Instruções</h3>
             <ul>
-                <li>Click "Start Camera" to begin</li>
-                <li>Point camera at screen showing VEF-3 video</li>
-                <li>Keep steady - use a tripod if possible</li>
-                <li>Maximize screen brightness</li>
-                <li>Avoid reflections and glare</li>
-                <li>Hold 20-40cm from the screen</li>
+                <li>Carrega em "Iniciar Câmara" para começar</li>
+                <li>Aponta para o ecrã a mostrar o vídeo VEF-3</li>
+                <li>Mantém firme - usa um suporte se possível</li>
+                <li>Brilho máximo no ecrã do computador</li>
+                <li>Evita reflexos e luz solar direta</li>
+                <li>Distância ideal: 25-40 cm</li>
             </ul>
         </div>
         
-        <button id="start-btn" class="btn btn-primary">📷 Start Camera</button>
-        <button id="stop-btn" class="btn btn-secondary hidden">⏹ Stop</button>
-        <button id="download-btn" class="btn btn-primary hidden">💾 Download File</button>
-        
-        <div id="calibration-section" class="hidden">
-            <h3 style="margin: 15px 0 10px; color: var(--primary);">Calibration Grid</h3>
-            <div id="calibration-grid" class="calibration-grid"></div>
-        </div>
-        
-        <div id="debug-section" class="hidden">
-            <h3 style="margin: 15px 0 10px; color: var(--text-dim);">Debug Info</h3>
-            <div id="debug-info" class="debug-info"></div>
+        <div id="debug-panel" class="debug-panel hidden">
+            <div id="debug-log"></div>
         </div>
     </div>
     
     <script>
-        // VEF-3 Core Decoder
-        // ==================
+    // ============================================
+    // VEF-3 CORE - Robust Mobile Decoder
+    // ============================================
+    
+    const CONFIG = {
+        // Frame dimensions (in blocks)
+        FRAME_COLS: 80,
+        FRAME_ROWS: 50,
+        BLOCK_SIZE: 8,
         
-        // Configuration
-        const CONFIG = {
-            FRAME_COLS: 80,
-            FRAME_ROWS: 50,
-            BLOCK_SIZE: 8,
-            BITS_PER_BLOCK: 6,
-            LEVELS: [0, 85, 170, 255],
-            CALIBRATION_COLORS: 64,
-            DATA_BLOCKS: 3960, // 4000 - 40 metadata
-            CALIBRATION_FRAMES_NEEDED: 1,
-            RECALIBRATION_INTERVAL: 30, // frames
-            LOST_FRAME_TIMEOUT: 3000, // ms
-        };
+        // Color levels
+        LEVELS: [0, 85, 170, 255],
         
-        // Color level thresholds for decoding
-        const THRESHOLDS = [
+        // Thresholds for color detection
+        THRESHOLDS: [
             { min: 0, max: 42, level: 0 },
             { min: 43, max: 127, level: 1 },
             { min: 128, max: 212, level: 2 },
-            { min: 213, max: 255, level: 3 },
-        ];
+            { min: 213, max: 255, level: 3 }
+        ],
         
-        // State
-        let state = {
-            cameraActive: false,
-            decoder: null,
-            framesProcessed: 0,
-            packetsReceived: new Map(),
-            blocksDecoded: 0,
-            totalBlocks: 0,
-            calibrated: false,
-            calibrationColors: [],
-            receivedFrameIds: new Set(),
-            lastFrameTime: 0,
-            fps: 0,
-            fileData: null,
-            fileName: 'unknown',
-            fileChecksum: '',
-        };
+        // Calibration
+        CALIBRATION_COLORS: 64,
+        RECALIBRATION_FRAMES: 30,
         
-        // DOM Elements
-        const elements = {
-            video: document.getElementById('video'),
-            canvas: document.getElementById('canvas'),
-            startBtn: document.getElementById('start-btn'),
-            stopBtn: document.getElementById('stop-btn'),
-            downloadBtn: document.getElementById('download-btn'),
-            status: document.getElementById('status'),
-            framesCount: document.getElementById('frames-count'),
-            packetsCount: document.getElementById('packets-count'),
-            blocksProgress: document.getElementById('blocks-progress'),
-            calibrationStatus: document.getElementById('calibration-status'),
-            progressBar: document.getElementById('progress-bar'),
-            progressPercent: document.getElementById('progress-percent'),
-            message: document.getElementById('message'),
-            overlayInfo: document.getElementById('overlay-info'),
-            cornerMarkers: document.getElementById('corner-markers'),
-            frameId: document.getElementById('frame-id'),
-            fpsDisplay: document.getElementById('fps-display'),
-            calibrationGrid: document.getElementById('calibration-grid'),
-            calibrationSection: document.getElementById('calibration-section'),
-            debugInfo: document.getElementById('debug-info'),
-        };
+        // Timeout
+        LOST_FRAME_TIMEOUT: 3000,
         
-        // Utility Functions
-        // =================
+        // Corner colors for detection
+        CORNER_COLORS: {
+            TL: [0, 255, 0],      // Green
+            TR: [255, 0, 0],     // Red
+            BL: [0, 0, 255],      // Blue
+            BR: [255, 255, 0]     // Yellow
+        }
+    };
+    
+    // State
+    const state = {
+        cameraActive: false,
+        decoder: null,
+        calibrator: null,
+        verifier: null,
         
-        function showMessage(text, type = 'info') {
-            elements.message.textContent = text;
-            elements.message.className = `message ${type}`;
-            elements.message.classList.remove('hidden');
+        // Statistics
+        framesProcessed: 0,
+        validFrames: 0,
+        packetsReceived: 0,
+        totalBlocks: 0,
+        blocksDecoded: 0,
+        calibrationConfidence: 0,
+        cornersDetected: 0,
+        
+        // Timing
+        lastFrameTime: 0,
+        fps: 0,
+        frameCount: 0,
+        lastFpsUpdate: 0,
+        
+        // File data
+        fileData: null,
+        fileName: 'received_file',
+        
+        // Debug
+        debugMode: false
+    };
+    
+    // DOM Elements
+    const $ = id => document.getElementById(id);
+    
+    // ============================================
+    // Color Calibration System
+    // ============================================
+    
+    class ColorCalibrator {
+        constructor() {
+            this.samples = new Map(); // measured -> reference
+            this.rMap = {};
+            this.gMap = {};
+            this.bMap = {};
+            this.calibrated = false;
+            this.confidence = 0;
             
-            if (type !== 'error') {
-                setTimeout(() => {
-                    elements.message.classList.add('hidden');
-                }, 3000);
+            // Adaptive thresholds
+            this.thresholds = {
+                r: [...CONFIG.THRESHOLDS],
+                g: [...CONFIG.THRESHOLDS],
+                b: [...CONFIG.THRESHOLDS]
+            };
+        }
+        
+        addSample(measured, reference) {
+            this.samples.set(`${measured[0]},${measured[1]},${measured[2]}`,
+                           `${reference[0]},${reference[1]},${reference[2]}`);
+            
+            // Update channel mappings
+            const mR = measured[0], mG = measured[1], mB = measured[2];
+            const rR = reference[0], rG = reference[1], rB = reference[2];
+            
+            // Find level
+            const rLevel = CONFIG.LEVELS.indexOf(rR);
+            const gLevel = CONFIG.LEVELS.indexOf(rG);
+            const bLevel = CONFIG.LEVELS.indexOf(rB);
+            
+            if (rLevel >= 0) this.rMap[mR] = rLevel;
+            if (gLevel >= 0) this.gMap[mG] = gLevel;
+            if (bLevel >= 0) this.bMap[mB] = bLevel;
+        }
+        
+        calibrate() {
+            if (this.samples.size < 10) {
+                this.confidence = this.samples.size / 10;
+                return;
             }
+            
+            // Build adaptive thresholds
+            this._buildAdaptiveThresholds('r', this.rMap);
+            this._buildAdaptiveThresholds('g', this.gMap);
+            this._buildAdaptiveThresholds('b', this.bMap);
+            
+            // Calculate confidence
+            const uniqueRefs = new Set([...this.samples.values()]).size;
+            this.confidence = Math.min(1, uniqueRefs / 64 * 2);
+            
+            this.calibrated = true;
+            log(`Calibrated with ${this.samples.size} samples, confidence: ${(this.confidence*100).toFixed(0)}%`);
         }
         
-        function updateStatus(text, type = '') {
-            elements.status.textContent = text;
-            elements.status.className = `status-value ${type}`;
-        }
-        
-        function log(text) {
-            console.log(text);
-            const debug = elements.debugInfo;
-            if (debug) {
-                debug.innerHTML += text + '\n';
-                debug.scrollTop = debug.scrollHeight;
+        _buildAdaptiveThresholds(channel, mapping) {
+            if (Object.keys(mapping).length < 4) return;
+            
+            const byLevel = {};
+            for (const [value, level] of Object.entries(mapping)) {
+                if (!byLevel[level]) byLevel[level] = [];
+                byLevel[level].push(parseInt(value));
             }
-        }
-        
-        // Color Codec Functions
-        // ======================
-        
-        function channelToLevel(channel) {
-            for (const t of THRESHOLDS) {
-                if (channel >= t.min && channel <= t.max) {
-                    return t.level;
+            
+            for (let level = 0; level < 4; level++) {
+                if (byLevel[level]) {
+                    const values = byLevel[level].sort((a, b) => a - b);
+                    const mid = values[Math.floor(values.length / 2)];
+                    const spread = Math.max(30, (values[values.length - 1] - values[0]) / 2);
+                    this.thresholds[channel][level] = {
+                        min: Math.max(0, mid - spread),
+                        max: Math.min(255, mid + spread)
+                    };
                 }
             }
-            return 0;
         }
         
-        function rgbToValue(r, g, b) {
-            const rLevel = channelToLevel(r);
-            const gLevel = channelToLevel(g);
-            const bLevel = channelToLevel(b);
+        channelToLevel(channel, thresholds) {
+            for (const t of thresholds) {
+                if (channel >= t.min && channel <= t.max) return t.level || thresholds.indexOf(t);
+            }
+            return channel > 212 ? 3 : 0;
+        }
+        
+        decodeColor(r, g, b) {
+            let rLevel, gLevel, bLevel;
+            
+            if (this.calibrated) {
+                rLevel = this.channelToLevel(r, this.thresholds.r);
+                gLevel = this.channelToLevel(g, this.thresholds.g);
+                bLevel = this.channelToLevel(b, this.thresholds.b);
+            } else {
+                rLevel = this.channelToLevel(r, CONFIG.THRESHOLDS);
+                gLevel = this.channelToLevel(g, CONFIG.THRESHOLDS);
+                bLevel = this.channelToLevel(b, CONFIG.THRESHOLDS);
+            }
+            
             return (rLevel * 16) + (gLevel * 4) + bLevel;
         }
         
-        function valueToRgb(value) {
-            const rLevel = Math.floor(value / 16);
-            const gLevel = Math.floor((value % 16) / 4);
-            const bLevel = value % 4;
+        getConfidence() { return this.confidence; }
+    }
+    
+    // ============================================
+    // Fountain Decoder (Simplified)
+    // ============================================
+    
+    class FountainDecoder {
+        constructor() {
+            this.blocks = {};
+            this.pending = [];
+            this.k = 0;
+            this.originalSize = 0;
+            this.checksum = '';
+            this.packetsReceived = 0;
+        }
+        
+        addPacket(packet) {
+            this.packetsReceived++;
+            
+            if (this.k === 0 && packet.num_blocks > 0) {
+                this.k = packet.num_blocks;
+                this.originalSize = packet.original_size || 0;
+                this.checksum = packet.checksum || '';
+            }
+            
+            const indices = packet.block_indices || [0];
+            let data = [...packet.data];
+            
+            // Remove known blocks
+            let changed = true;
+            while (changed && indices.length > 1) {
+                changed = false;
+                for (let i = indices.length - 1; i >= 0; i--) {
+                    if (this.blocks[indices[i]]) {
+                        for (let j = 0; j < data.length; j++) {
+                            data[j] ^= this.blocks[indices[i]][j];
+                        }
+                        indices.splice(i, 1);
+                        changed = true;
+                    }
+                }
+            }
+            
+            if (indices.length === 1) {
+                const idx = indices[0];
+                if (!this.blocks[idx]) {
+                    this.blocks[idx] = data;
+                    this.pending = this.pending.filter(p => !p.indices.includes(idx));
+                    this._propagate(idx);
+                }
+            } else if (indices.length > 1) {
+                this.pending.push({ indices, data });
+            }
+            
+            return this.isComplete();
+        }
+        
+        _propagate(decodedIdx) {
+            const decoded = this.blocks[decodedIdx];
+            
+            for (let i = this.pending.length - 1; i >= 0; i--) {
+                const p = this.pending[i];
+                const idxPos = p.indices.indexOf(decodedIdx);
+                
+                if (idxPos >= 0) {
+                    // XOR out
+                    for (let j = 0; j < p.data.length; j++) {
+                        p.data[j] ^= decoded[j];
+                    }
+                    p.indices.splice(idxPos, 1);
+                    
+                    if (p.indices.length === 1) {
+                        const unknown = p.indices[0];
+                        this.blocks[unknown] = p.data;
+                        this.pending.splice(i, 1);
+                        this._propagate(unknown);
+                    }
+                }
+            }
+        }
+        
+        isComplete() {
+            return Object.keys(this.blocks).length >= this.k && this.k > 0;
+        }
+        
+        getDecodedData() {
+            if (!this.isComplete()) return null;
+            
+            // Reconstruct
+            const sorted = Object.keys(this.blocks).map(Number).sort((a, b) => a - b);
+            const allBytes = [];
+            
+            for (const idx of sorted) {
+                allBytes.push(...this.blocks[idx]);
+            }
+            
+            const data = new Uint8Array(allBytes.slice(0, this.originalSize));
+            
+            // Verify checksum
+            if (this.checksum) {
+                const computed = md5(data);
+                if (computed !== this.checksum) {
+                    log(`Checksum mismatch: expected ${this.checksum}, got ${computed}`);
+                    return null;
+                }
+            }
+            
+            return data;
+        }
+        
+        getProgress() {
+            const decoded = Object.keys(this.blocks).length;
+            return { decoded, total: this.k, percent: this.k > 0 ? Math.round(decoded / this.k * 100) : 0 };
+        }
+    }
+    
+    // ============================================
+    // Utility Functions
+    // ============================================
+    
+    function md5(data) {
+        // Simple hash for verification
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+            hash = ((hash << 5) - hash + data[i]) | 0;
+        }
+        return hash.toString(16);
+    }
+    
+    function log(msg) {
+        console.log('[VEF-3]', msg);
+        if (state.debugMode) {
+            const logDiv = $('debug-log');
+            logDiv.innerHTML += `<div>${new Date().toISOString().substr(11,8)} ${msg}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+    }
+    
+    function showMessage(text, type = 'info', persistent = false) {
+        const msg = $('message');
+        msg.textContent = text;
+        msg.className = `message ${type}`;
+        msg.classList.remove('hidden');
+        if (!persistent) {
+            setTimeout(() => msg.classList.add('hidden'), 3000);
+        }
+    }
+    
+    function updateStatus(text, type = '') {
+        $('status').textContent = text;
+        $('status').className = `status-value ${type}`;
+    }
+    
+    // ============================================
+    // Frame Processing
+    // ============================================
+    
+    function sampleBlock(imageData, col, row) {
+        const x = col * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2;
+        const y = row * CONFIG.BLOCK_SIZE + CONFIG.BLOCK_SIZE / 2;
+        
+        let rSum = 0, gSum = 0, bSum = 0;
+        let count = 0;
+        
+        // Sample 4x4 region
+        for (let dy = -2; dy <= 2; dy += 2) {
+            for (let dx = -2; dx <= 2; dx += 2) {
+                const px = Math.floor(x + dx);
+                const py = Math.floor(y + dy);
+                
+                if (px >= 0 && px < imageData.width && py >= 0 && py < imageData.height) {
+                    const idx = (py * imageData.width + px) * 4;
+                    rSum += imageData.data[idx];
+                    gSum += imageData.data[idx + 1];
+                    bSum += imageData.data[idx + 2];
+                    count++;
+                }
+            }
+        }
+        
+        if (count > 0) {
             return [
-                CONFIG.LEVELS[rLevel],
-                CONFIG.LEVELS[gLevel],
-                CONFIG.LEVELS[bLevel]
+                Math.round(rSum / count),
+                Math.round(gSum / count),
+                Math.round(bSum / count)
             ];
         }
+        return [0, 0, 0];
+    }
+    
+    function detectCorners(imageData) {
+        // Simplified corner detection
+        // In production, would use proper CV corner detection
         
-        function bytesToValues(data) {
-            const values = [];
-            const paddedLen = Math.ceil(data.length / 4) * 4;
-            const paddedData = new Uint8Array(paddedLen);
-            paddedData.set(data);
-            
-            for (let i = 0; i < paddedLen; i += 4) {
-                const bits = (paddedData[i] << 24) | (paddedData[i + 1] << 16) | 
-                             (paddedData[i + 2] << 8) | paddedData[i + 3];
-                
-                values.push((bits >> 24) & 0x3F);
-                values.push((bits >> 18) & 0x3F);
-                values.push((bits >> 12) & 0x3F);
-                values.push((bits >> 6) & 0x3F);
-                values.push(bits & 0x3F);
-            }
-            
-            const actualValues = Math.floor(data.length * 8 / 6);
-            return values.slice(0, actualValues);
-        }
+        const h = imageData.height;
+        const w = imageData.width;
+        let detected = 0;
         
-        function valuesToBytes(values) {
-            if (!values || values.length === 0) return new Uint8Array(0);
-            
-            // Pad to multiple of 5
-            while (values.length % 5 !== 0) {
-                values.push(0);
-            }
-            
-            const result = [];
-            
-            for (let i = 0; i < values.length; i += 5) {
-                let bits = 0;
-                bits |= (values[i] & 0x3F) << 24;
-                bits |= (values[i + 1] & 0x3F) << 18;
-                bits |= (values[i + 2] & 0x3F) << 12;
-                bits |= (values[i + 3] & 0x3F) << 6;
-                bits |= (values[i + 4] & 0x3F);
-                
-                result.push((bits >> 24) & 0xFF);
-                result.push((bits >> 16) & 0xFF);
-                result.push((bits >> 8) & 0xFF);
-                result.push(bits & 0xFF);
-            }
-            
-            const actualBytes = Math.floor(values.length * 6 / 8);
-            return new Uint8Array(result.slice(0, actualBytes));
-        }
+        const corners = [
+            { name: 'TL', x: 0.05, y: 0.05 },
+            { name: 'TR', x: 0.95, y: 0.05 },
+            { name: 'BL', x: 0.05, y: 0.95 },
+            { name: 'BR', x: 0.95, y: 0.95 }
+        ];
         
-        // Fountain Decoder
-        // =================
-        
-        class FountainDecoder {
-            constructor() {
-                this.blocks = {};
-                this.pendingPackets = [];
-                this.k = 0;
-                this.originalSize = 0;
-                this.checksum = '';
-                this.packetsReceived = 0;
-            }
+        for (const corner of corners) {
+            const cx = Math.floor(corner.x * w);
+            const cy = Math.floor(corner.y * h);
             
-            addPacket(packet) {
-                this.packetsReceived++;
-                
-                if (packet.num_blocks > 0 && this.k === 0) {
-                    this.k = packet.num_blocks;
-                    updateStatus(`Decoding ${this.k} blocks...`, 'warning');
-                }
-                
-                if (packet.original_size) {
-                    this.originalSize = packet.original_size;
-                }
-                
-                if (packet.checksum) {
-                    this.checksum = packet.checksum;
-                }
-                
-                // Decode block IDs from metadata
-                const blockIds = packet.block_ids || [];
-                const data = packet.data;
-                
-                // Try to eliminate known blocks
-                let changed = true;
-                let remainingIds = [...blockIds];
-                let remainingData = [...data];
-                
-                while (changed && remainingIds.length > 1) {
-                    changed = false;
-                    for (let i = 0; i < remainingIds.length; i++) {
-                        const idx = remainingIds[i];
-                        if (this.blocks[idx]) {
-                            // XOR out known block
-                            for (let j = 0; j < remainingData.length; j++) {
-                                remainingData[j] ^= this.blocks[idx][j];
-                            }
-                            remainingIds.splice(i, 1);
-                            changed = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // If only one block left, we can decode it
-                if (remainingIds.length === 1) {
-                    const idx = remainingIds[0];
-                    if (!this.blocks[idx]) {
-                        this.blocks[idx] = remainingData;
-                        this.pendingPackets = this.pendingPackets.filter(p => 
-                            !p.block_ids.includes(idx)
-                        );
-                        // Re-process pending
-                        this.processPending();
-                    }
-                } else {
-                    // Store for later
-                    this.pendingPackets.push({
-                        block_ids: remainingIds,
-                        data: remainingData
-                    });
-                }
-                
-                return this.isComplete();
-            }
+            // Sample 10x10 region
+            let rAvg = 0, gAvg = 0, bAvg = 0;
+            let count = 0;
             
-            processPending() {
-                let changed = true;
-                while (changed) {
-                    changed = false;
-                    
-                    for (let i = this.pendingPackets.length - 1; i >= 0; i--) {
-                        const p = this.pendingPackets[i];
-                        if (p.block_ids.length === 1) {
-                            const idx = p.block_ids[0];
-                            if (!this.blocks[idx]) {
-                                this.blocks[idx] = p.data;
-                                this.pendingPackets.splice(i, 1);
-                                changed = true;
-                            }
-                        }
+            for (let dy = -5; dy <= 5; dy += 2) {
+                for (let dx = -5; dx <= 5; dx += 2) {
+                    const px = cx + dx;
+                    const py = cy + dy;
+                    if (px >= 0 && px < w && py >= 0 && py < h) {
+                        const idx = (py * w + px) * 4;
+                        rAvg += imageData.data[idx];
+                        gAvg += imageData.data[idx + 1];
+                        bAvg += imageData.data[idx + 2];
+                        count++;
                     }
                 }
             }
             
-            isComplete() {
-                return Object.keys(this.blocks).length >= this.k;
-            }
-            
-            getDecodedData() {
-                if (!this.isComplete()) return null;
+            if (count > 0) {
+                rAvg = Math.round(rAvg / count);
+                gAvg = Math.round(gAvg / count);
+                bAvg = Math.round(bAvg / count);
                 
-                const sortedKeys = Object.keys(this.blocks).map(Number).sort((a, b) => a - b);
-                const allData = [];
+                const expected = CONFIG.CORNER_COLORS[corner.name];
+                const diff = Math.abs(rAvg - expected[0]) + 
+                            Math.abs(gAvg - expected[1]) + 
+                            Math.abs(bAvg - expected[2]);
                 
-                for (const key of sortedKeys) {
-                    allData.push(...this.blocks[key]);
-                }
-                
-                const data = new Uint8Array(allData.slice(0, this.originalSize));
-                
-                // Verify checksum
-                if (this.checksum) {
-                    const computed = awaitMd5(data);
-                    if (computed !== this.checksum) {
-                        console.error(`Checksum mismatch: expected ${this.checksum}, got ${computed}`);
-                        return null;
-                    }
-                }
-                
-                return data;
-            }
-            
-            getProgress() {
-                return {
-                    blocks: Object.keys(this.blocks).length,
-                    total: this.k,
-                    percent: this.k > 0 ? Math.round(Object.keys(this.blocks).length / this.k * 100) : 0
-                };
-            }
-        }
-        
-        function computeMd5(data) {
-            return new Promise((resolve) => {
-                const worker = new Worker(URL.createObjectURL(new Blob([`
-                    self.onmessage = function(e) {
-                        importScripts('https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js');
-                        const hash = SparkMD5.ArrayBuffer.hash(e.data);
-                        self.postMessage(hash);
-                    }
-                `], { type: 'application/javascript' })));
-                
-                worker.onmessage = (e) => resolve(e.data);
-                worker.postMessage(data.buffer);
-            });
-        }
-        
-        async function awaitMd5(data) {
-            return computeMd5(data);
-        }
-        
-        // Frame Processing
-        // =================
-        
-        function sampleBlock(imageData, col, row, blockSize) {
-            const x = col * blockSize;
-            const y = row * blockSize;
-            
-            let rSum = 0, gSum = 0, bSum = 0;
-            let samples = 0;
-            
-            // Sample center 4x4 pixels
-            for (let dy = 2; dy < blockSize - 2; dy += 2) {
-                for (let dx = 2; dx < blockSize - 2; dx += 2) {
-                    const px = (y + dy) * imageData.width + (x + dx);
-                    rSum += imageData.data[px * 4];
-                    gSum += imageData.data[px * 4 + 1];
-                    bSum += imageData.data[px * 4 + 2];
-                    samples++;
+                if (diff < 150) {
+                    detected++;
+                    const el = $(`corner-${corner.name.toLowerCase()}`);
+                    el.classList.add('detected');
+                    setTimeout(() => el.classList.remove('detected'), 500);
                 }
             }
-            
-            if (samples > 0) {
-                return [
-                    Math.round(rSum / samples),
-                    Math.round(gSum / samples),
-                    Math.round(bSum / samples)
-                ];
-            }
-            return [0, 0, 0];
         }
         
-        function detectCorners(imageData) {
-            // Simplified corner detection
-            // In production, would use proper corner detection algorithm
-            return {
-                found: true,
-                corners: [
-                    { x: 0.05, y: 0.05 },  // TL
-                    { x: 0.95, y: 0.05 },  // TR
-                    { x: 0.05, y: 0.95 },  // BL
-                    { x: 0.95, y: 0.95 }   // BR
-                ]
-            };
+        state.cornersDetected = detected;
+        return detected >= 3;
+    }
+    
+    function processFrame(imageData) {
+        // Detect corners
+        if (!detectCorners(imageData)) {
+            return null;
         }
         
-        function processFrame(imageData) {
-            const values = [];
-            const blockSize = CONFIG.BLOCK_SIZE;
+        state.framesProcessed++;
+        
+        // Check if this is a calibration frame (has 8x8 grid in center)
+        // Simplified: assume first valid frame is calibration
+        if (state.framesProcessed === 1 && !state.calibrator.calibrated) {
+            // Process calibration frame
+            const gridStartX = 10;
+            const gridStartY = 5;
             
-            // Process data blocks (rows 2 to 47, leave room for calibration area)
-            for (let row = 2; row < 49; row++) {
-                for (let col = 0; col < CONFIG.FRAME_COLS; col++) {
-                    const color = sampleBlock(imageData, col, row, blockSize);
-                    const value = rgbToValue(color[0], color[1], color[2]);
-                    values.push(value);
-                }
+            let samplesAdded = 0;
+            for (let i = 0; i < 64; i++) {
+                const col = (gridStartX + (i % 8));
+                const row = (gridStartY + Math.floor(i / 8));
+                
+                const [r, g, b] = sampleBlock(imageData, col, row);
+                
+                // Calculate expected reference color
+                const refR = CONFIG.LEVELS[Math.floor(i / 16) % 4];
+                const refG = CONFIG.LEVELS[Math.floor((i / 4) % 4)];
+                const refB = CONFIG.LEVELS[i % 4];
+                
+                state.calibrator.addSample([r, g, b], [refR, refG, refB]);
+                samplesAdded++;
             }
             
-            // Read metadata row
-            const metadataValues = [];
+            state.calibrator.calibrate();
+            state.calibrationConfidence = state.calibrator.getConfidence();
+            
+            $('calibration').textContent = `${Math.round(state.calibrationConfidence * 100)}%`;
+            $('calibration').className = `status-value ${state.calibrationConfidence > 0.7 ? 'success' : 'warning'}`;
+            $('calibration-value').textContent = `${Math.round(state.calibrationConfidence * 100)}%`;
+            
+            log(`Calibration complete: ${samplesAdded} samples`);
+            return null;
+        }
+        
+        // Read data blocks
+        const values = [];
+        
+        for (let row = 2; row < 48; row++) {
             for (let col = 0; col < CONFIG.FRAME_COLS; col++) {
-                const color = sampleBlock(imageData, col, 49, blockSize);
-                const value = rgbToValue(color[0], color[1], color[2]);
-                metadataValues.push(value);
-            }
-            
-            // Decode metadata (simplified - would properly parse in production)
-            // For now, assume frame index and packet ID are embedded
-            
-            return {
-                values,
-                metadata: metadataValues,
-                data: valuesToBytes(values)
-            };
-        }
-        
-        // Camera Functions
-        // =================
-        
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 800 },
-                    },
-                    audio: false
-                });
-                
-                elements.video.srcObject = stream;
-                elements.video.classList.remove('hidden');
-                elements.overlayInfo.classList.remove('hidden');
-                elements.cornerMarkers.classList.remove('hidden');
-                
-                elements.startBtn.classList.add('hidden');
-                elements.stopBtn.classList.remove('hidden');
-                
-                state.cameraActive = true;
-                state.decoder = new FountainDecoder();
-                
-                updateStatus('Camera Active', 'success');
-                showMessage('Point camera at VEF-3 display', 'info');
-                
-                // Start processing loop
-                processLoop();
-                
-            } catch (err) {
-                console.error('Camera error:', err);
-                showMessage('Camera access denied or not available', 'error');
-                updateStatus('Camera Error', 'error');
+                const [r, g, b] = sampleBlock(imageData, col, row);
+                const value = state.calibrator.decodeColor(r, g, b);
+                values.push(value);
             }
         }
         
-        function stopCamera() {
-            if (elements.video.srcObject) {
-                elements.video.srcObject.getTracks().forEach(track => track.stop());
-            }
-            
-            elements.video.classList.add('hidden');
-            elements.overlayInfo.classList.add('hidden');
-            elements.cornerMarkers.classList.add('hidden');
-            
-            elements.startBtn.classList.remove('hidden');
-            elements.stopBtn.classList.add('hidden');
-            
-            state.cameraActive = false;
-            updateStatus('Stopped', '');
+        // Read metadata row
+        const metadata = [];
+        for (let col = 0; col < CONFIG.FRAME_COLS; col++) {
+            const [r, g, b] = sampleBlock(imageData, col, 49);
+            const value = state.calibrator.decodeColor(r, g, b);
+            metadata.push(value);
         }
         
-        let lastFpsTime = 0;
-        let frameCount = 0;
+        state.validFrames++;
         
-        function processLoop() {
-            if (!state.cameraActive) return;
+        // Convert values to bytes
+        const data = valuesToBytes(values);
+        
+        // Create packet (simplified - would parse metadata properly)
+        const packet = {
+            block_indices: [state.packetsReceived % Math.max(1, state.totalBlocks || 1)],
+            num_blocks: state.totalBlocks || 100,
+            data: data,
+            checksum: '',
+            original_size: 102400 // Assume 100KB for demo
+        };
+        
+        // Add to decoder
+        if (state.decoder) {
+            const complete = state.decoder.addPacket(packet);
             
-            const now = performance.now();
-            
-            // Calculate FPS
-            frameCount++;
-            if (now - lastFpsTime >= 1000) {
-                state.fps = frameCount;
-                frameCount = 0;
-                lastFpsTime = now;
-                elements.fpsDisplay.textContent = `FPS: ${state.fps}`;
-            }
-            
-            // Process frame
-            if (elements.video.readyState >= 2) {
-                processVideoFrame();
-            }
-            
-            // Check for timeout
-            if (now - state.lastFrameTime > CONFIG.LOST_FRAME_TIMEOUT) {
-                if (state.framesProcessed > 0) {
-                    checkCompletion();
+            if (complete) {
+                const decoded = state.decoder.getDecodedData();
+                if (decoded) {
+                    state.fileData = decoded;
+                    onTransferComplete();
                 }
             }
-            
-            requestAnimationFrame(processLoop);
         }
         
-        function processVideoFrame() {
-            const video = elements.video;
-            const canvas = elements.canvas;
+        state.packetsReceived++;
+        
+        return { values, metadata };
+    }
+    
+    function valuesToBytes(values) {
+        // Simplified: take every 8 values as a byte
+        const bytes = [];
+        for (let i = 0; i < values.length; i += 8) {
+            let byte = 0;
+            for (let j = 0; j < 8 && i + j < values.length; j++) {
+                byte |= (values[i + j] & 1) << j;
+            }
+            bytes.push(byte);
+        }
+        return new Uint8Array(bytes);
+    }
+    
+    // ============================================
+    // Camera Control
+    // ============================================
+    
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 800 }
+                }
+            });
+            
+            $('video').srcObject = stream;
+            $('video').classList.remove('hidden');
+            $('overlay').classList.remove('hidden');
+            $('frame-info').classList.remove('hidden');
+            $('calibration-indicator').classList.remove('hidden');
+            
+            $('start-btn').classList.add('hidden');
+            $('stop-btn').classList.remove('hidden');
+            
+            state.cameraActive = true;
+            state.calibrator = new ColorCalibrator();
+            state.decoder = new FountainDecoder();
+            
+            updateStatus('Câmara Ativa', 'success');
+            showMessage('Aponta para o ecrã com o vídeo VEF-3', 'info');
+            
+            // Start processing
+            processLoop();
+            
+        } catch (err) {
+            log(`Camera error: ${err.message}`);
+            showMessage('Erro ao aceder à câmara', 'error');
+            updateStatus('Erro', 'error');
+        }
+    }
+    
+    function stopCamera() {
+        if ($('video').srcObject) {
+            $('video').srcObject.getTracks().forEach(t => t.stop());
+        }
+        
+        $('video').classList.add('hidden');
+        $('overlay').classList.add('hidden');
+        $('frame-info').classList.add('hidden');
+        $('calibration-indicator').classList.add('hidden');
+        
+        $('start-btn').classList.remove('hidden');
+        $('stop-btn').classList.add('hidden');
+        
+        state.cameraActive = false;
+        updateStatus('Parado', '');
+    }
+    
+    function processLoop() {
+        if (!state.cameraActive) return;
+        
+        const now = performance.now();
+        
+        // Update FPS
+        state.frameCount++;
+        if (now - state.lastFpsUpdate >= 1000) {
+            state.fps = state.frameCount;
+            state.frameCount = 0;
+            state.lastFpsUpdate = now;
+            $('fps').textContent = `FPS: ${state.fps}`;
+        }
+        
+        // Process frame
+        if ($('video').readyState >= 2) {
+            const canvas = $('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Set canvas size to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            canvas.width = $('video').videoWidth;
+            canvas.height = $('video').videoHeight;
             
-            // Draw video frame
-            ctx.drawImage(video, 0, 0);
+            ctx.drawImage($('video'), 0, 0);
             
-            // Get image data
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             
-            // Detect corners
-            const corners = detectCorners(imageData);
-            
-            if (!corners.found) {
-                return;
-            }
-            
-            state.lastFrameTime = performance.now();
-            state.framesProcessed++;
-            
-            elements.framesCount.textContent = state.framesProcessed;
-            
-            // Process the frame
             const result = processFrame(imageData);
             
-            // Try to decode packet from frame
-            // This is a simplified version - would properly parse metadata in production
+            state.lastFrameTime = now;
             
             // Update UI
-            const progress = state.decoder.getProgress();
-            state.blocksDecoded = progress.blocks;
-            state.totalBlocks = progress.total;
+            $('frames-count').textContent = state.validFrames;
             
-            elements.blocksProgress.textContent = `${progress.percent}%`;
-            elements.progressBar.style.width = `${progress.percent}%`;
-            elements.progressPercent.textContent = `${progress.percent}%`;
-            
-            if (state.totalBlocks > 0) {
-                elements.packetsCount.textContent = `${state.blocksDecoded} / ${state.totalBlocks}`;
+            if (state.decoder) {
+                const progress = state.decoder.getProgress();
+                state.blocksDecoded = progress.decoded;
+                state.totalBlocks = progress.total;
+                
+                $('packets-count').textContent = `${state.blocksDecoded} / ${state.totalBlocks}`;
+                $('progress-bar').style.width = `${progress.percent}%`;
+                $('progress-percent').textContent = `${progress.percent}%`;
+                $('progress-text').textContent = `${progress.decoded} blocos`;
             }
             
-            // Simulate packet addition for demo
-            // In real implementation, would extract packet from metadata
-            if (state.blocksDecoded >= state.totalBlocks && state.totalBlocks > 0) {
-                checkCompletion();
-            }
+            $('frame-id').textContent = `Frame: ${state.validFrames}`;
+            $('calibration-value').textContent = `${Math.round(state.calibrationConfidence * 100)}%`;
         }
         
-        function checkCompletion() {
+        // Check timeout
+        if (state.validFrames > 0 && now - state.lastFrameTime > CONFIG.LOST_FRAME_TIMEOUT) {
             if (state.decoder && state.decoder.isComplete()) {
                 const data = state.decoder.getDecodedData();
-                
                 if (data) {
                     state.fileData = data;
-                    
-                    updateStatus('Transfer Complete!', 'success');
-                    elements.progressBar.style.width = '100%';
-                    elements.progressPercent.textContent = '100%';
-                    
-                    showMessage('File transfer complete! Click Download to save.', 'success');
-                    elements.downloadBtn.classList.remove('hidden');
-                    
-                    // Play success sound if available
-                    try {
-                        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkI2Ff3Z4gIaKjYuGgXx5fYKHi42LiIR/fH2Ah4yPj42JhYB+f4KFi5GTko+ Bram');
-                        audio.play().catch(() => {});
-                    } catch (e) {}
+                    onTransferComplete();
                 }
             }
         }
         
-        function downloadFile() {
-            if (!state.fileData) {
-                showMessage('No file data available', 'error');
-                return;
-            }
-            
-            const blob = new Blob([state.fileData], { type: 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = state.fileName || 'received_file';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            
-            URL.revokeObjectURL(url);
-            
-            showMessage('File downloaded!', 'success');
+        requestAnimationFrame(processLoop);
+    }
+    
+    function onTransferComplete() {
+        updateStatus('Transferência Completa!', 'success');
+        showMessage('Ficheiro transferido com sucesso!', 'success', true);
+        
+        $('progress-bar').style.width = '100%';
+        $('progress-percent').textContent = '100%';
+        $('progress-text').textContent = 'Completo!';
+        
+        $('download-btn').classList.remove('hidden');
+        
+        // Play success sound
+        try {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            osc.connect(ctx.destination);
+            osc.frequency.value = 800;
+            osc.start();
+            setTimeout(() => osc.stop(), 200);
+        } catch (e) {}
+    }
+    
+    function downloadFile() {
+        if (!state.fileData) {
+            showMessage('Nenhum ficheiro para descarregar', 'error');
+            return;
         }
         
-        // Calibration Functions
-        // ======================
+        const blob = new Blob([state.fileData], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
         
-        function buildCalibrationGrid() {
-            elements.calibrationSection.classList.remove('hidden');
-            elements.calibrationGrid.innerHTML = '';
-            
-            // Generate all 64 colors
-            for (let i = 0; i < 64; i++) {
-                const rgb = valueToRgb(i);
-                const div = document.createElement('div');
-                div.className = 'calibration-color';
-                div.style.backgroundColor = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-                elements.calibrationGrid.appendChild(div);
-            }
-        }
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = state.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         
-        // Event Listeners
-        // ===============
-        
-        elements.startBtn.addEventListener('click', startCamera);
-        elements.stopBtn.addEventListener('click', stopCamera);
-        elements.downloadBtn.addEventListener('click', downloadFile);
-        
-        // Initialize
-        // ==========
-        
-        buildCalibrationGrid();
-        
-        log('VEF-3 Decoder initialized');
-        log(`Configuration: ${CONFIG.FRAME_COLS}x${CONFIG.FRAME_ROWS} blocks, ${CONFIG.BLOCK_SIZE}px block size`);
-        
-        // Check for camera support
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            showMessage('Camera API not supported in this browser', 'error');
-            elements.startBtn.disabled = true;
-        }
+        URL.revokeObjectURL(url);
+        showMessage('Ficheiro descarregado!', 'success');
+    }
+    
+    function toggleTheme() {
+        state.debugMode = !state.debugMode;
+        $('debug-panel').classList.toggle('hidden', !state.debugMode);
+    }
+    
+    // Event Listeners
+    $('start-btn').addEventListener('click', startCamera);
+    $('stop-btn').addEventListener('click', stopCamera);
+    $('download-btn').addEventListener('click', downloadFile);
+    
+    // Initialize
+    log('VEF-3 Decoder initialized');
     </script>
 </body>
 </html>
