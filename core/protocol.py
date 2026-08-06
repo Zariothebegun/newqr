@@ -3,8 +3,9 @@
 The image is 800x600 pixels.  Its centered 80x50 grid contains exactly 4,000
 8x8 colour blocks.  Two metadata rows (160 colour values) carry a self-
 describing header; the remaining 3,836 values carry one Fountain packet.
-Each byte is represented by two 6-bit colour values, matching the browser
-implementation in ``decoder/static/protocol.js``.
+Each tile carries six bits: four bits from a robust 4x4 symbol and two bits
+from a calibrated colour. The symbol and palette are shared with the browser
+implementation in ``decoder/static/tile-codec.js``.
 """
 
 from __future__ import annotations
@@ -35,10 +36,12 @@ DATA_POSITIONS = tuple(
 )
 DATA_VALUES = len(DATA_POSITIONS)
 BITS_PER_VALUE = 6
-BYTES_PER_VALUE_PAIR = 1
-PAYLOAD_BYTES = DATA_VALUES // 2
+PAYLOAD_BYTES = DATA_VALUES * BITS_PER_VALUE // 8
 
-FOUNTAIN_BLOCK_SIZE = 1024
+# Use the available frame payload as the Fountain block. This is what makes
+# the colour layer materially denser than a small QR payload; a conservative
+# receiver can still advertise a lower block size later.
+FOUNTAIN_BLOCK_SIZE = PAYLOAD_BYTES
 MAX_INDICES = 5
 HEADER_BYTES = METADATA_VALUES // 2
 MAX_FILE_SIZE = 64 * 1024 * 1024
@@ -62,35 +65,40 @@ CALIBRATION_GRID_SIZE = 8
 
 
 def bytes_to_values(data: bytes, value_count: int | None = None) -> list[int]:
-    """Encode each byte as two 6-bit values.
-
-    The first block carries the byte's six most-significant bits. The second
-    block carries the two least-significant bits; its upper four bits are zero
-    and remain available for future parity without changing the format.
-    """
+    """Pack a byte stream densely into six-bit tile values."""
 
     values: list[int] = []
+    buffer = 0
+    bits = 0
     for byte in data:
-        values.extend(((byte >> 2) & 0x3F, byte & 0x3F))
+        buffer = (buffer << 8) | byte
+        bits += 8
+        while bits >= BITS_PER_VALUE:
+            bits -= BITS_PER_VALUE
+            values.append((buffer >> bits) & 0x3F)
+    if bits:
+        values.append((buffer << (BITS_PER_VALUE - bits)) & 0x3F)
     if value_count is not None:
-        if len(values) < value_count:
-            values.extend([0] * (value_count - len(values)))
+        values.extend([0] * max(0, value_count - len(values)))
         return values[:value_count]
     return values
 
 
 def values_to_bytes(values: Iterable[int], byte_count: int | None = None) -> bytes:
-    """Decode pairs of colour values back into bytes."""
+    """Unpack dense six-bit tile values back into bytes."""
 
-    sequence = list(values)
     result = bytearray()
-    for offset in range(0, len(sequence) - 1, 2):
-        result.append(((sequence[offset] & 0x3F) << 2) | (sequence[offset + 1] & 0x03))
-        if byte_count is not None and len(result) >= byte_count:
-            break
-    if byte_count is not None:
-        return bytes(result[:byte_count])
-    return bytes(result)
+    buffer = 0
+    bits = 0
+    for value in values:
+        buffer = (buffer << BITS_PER_VALUE) | (value & 0x3F)
+        bits += BITS_PER_VALUE
+        while bits >= 8:
+            bits -= 8
+            result.append((buffer >> bits) & 0xFF)
+            if byte_count is not None and len(result) >= byte_count:
+                return bytes(result[:byte_count])
+    return bytes(result[:byte_count] if byte_count is not None else result)
 
 
 def crc32(data: bytes) -> int:

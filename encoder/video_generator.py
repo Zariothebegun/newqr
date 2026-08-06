@@ -58,10 +58,10 @@ def generate_transfer_video(
 
     # Calculate transfer parameters
     from core.color_codec import BLOCKS_PER_FRAME, BITS_PER_BLOCK
-    from core.protocol import DATA_VALUES, PAYLOAD_BYTES
+    from core.protocol import DATA_VALUES, FOUNTAIN_BLOCK_SIZE, PAYLOAD_BYTES
 
     bytes_per_frame = PAYLOAD_BYTES
-    k = (file_size + 1023) // 1024  # Number of 1KB blocks
+    k = (file_size + FOUNTAIN_BLOCK_SIZE - 1) // FOUNTAIN_BLOCK_SIZE
 
     print(f"\nTransfer Parameters:")
     print(f"  Frame size: {FRAME_COLS}x{FRAME_ROWS} blocks ({BLOCKS_PER_FRAME} blocks)")
@@ -81,7 +81,7 @@ def generate_transfer_video(
 
     # Generate fountain-encoded packets
     print(f"\nGenerating fountain-encoded packets...")
-    encoder = FountainEncoder(file_data, block_size=1024)
+    encoder = FountainEncoder(file_data, block_size=FOUNTAIN_BLOCK_SIZE)
 
     # Generate enough packets (about 2x the number of blocks for robustness).
     # The first K packets are one-source-block packets, which the browser

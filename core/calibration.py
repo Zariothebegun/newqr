@@ -359,7 +359,7 @@ class PacketReconstructor:
 
     @staticmethod
     def values_to_bytes(values: List[int]) -> bytes:
-        """Convert pairs of 6-bit values to bytes."""
+        """Convert dense six-bit tile values to bytes."""
         return protocol_values_to_bytes(values)
 
     def verify_packet(self, packet: dict) -> bool:

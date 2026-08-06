@@ -13,10 +13,8 @@ BITS_PER_BLOCK = 6
 class ColorCodec:
     """Map 0..63 values to four-level RGB colours and back.
 
-    A byte is deliberately represented by two blocks: the first contains six
-    useful high bits and the second contains the two low bits. The remaining
-    four bits are reserved, which keeps the wire format simple and leaves room
-    for future parity without changing the block geometry.
+    The tile layer uses all six bits. Byte streams are packed across successive
+    values, so four colour bits from a tile are never wasted.
     """
 
     @staticmethod
@@ -46,15 +44,29 @@ class ColorCodec:
     @staticmethod
     def bytes_to_values(data: bytes) -> list[int]:
         values: list[int] = []
+        buffer = 0
+        bits = 0
         for byte in data:
-            values.extend(((byte >> 2) & 0x3F, byte & 0x3F))
+            buffer = (buffer << 8) | byte
+            bits += 8
+            while bits >= BITS_PER_BLOCK:
+                bits -= BITS_PER_BLOCK
+                values.append((buffer >> bits) & 0x3F)
+        if bits:
+            values.append((buffer << (BITS_PER_BLOCK - bits)) & 0x3F)
         return values
 
     @staticmethod
     def values_to_bytes(values: list[int]) -> bytes:
         result = bytearray()
-        for offset in range(0, len(values) - 1, 2):
-            result.append(((values[offset] & 0x3F) << 2) | (values[offset + 1] & 0x03))
+        buffer = 0
+        bits = 0
+        for value in values:
+            buffer = (buffer << BITS_PER_BLOCK) | (value & 0x3F)
+            bits += BITS_PER_BLOCK
+            while bits >= 8:
+                bits -= 8
+                result.append((buffer >> bits) & 0xFF)
         return bytes(result)
 
     @staticmethod

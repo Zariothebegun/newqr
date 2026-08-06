@@ -20,8 +20,9 @@
         }
     }
     const DATA_VALUES = DATA_POSITIONS.length;
-    const PAYLOAD_BYTES = Math.floor(DATA_VALUES / 2);
-    const FOUNTAIN_BLOCK_SIZE = 1024;
+    const BITS_PER_VALUE = 6;
+    const PAYLOAD_BYTES = Math.floor(DATA_VALUES * BITS_PER_VALUE / 8);
+    const FOUNTAIN_BLOCK_SIZE = PAYLOAD_BYTES;
     const HEADER_BYTES = METADATA_VALUES / 2;
     const LEVELS = [0, 85, 170, 255];
     const MAX_INDICES = 5;
@@ -46,12 +47,22 @@
         return new Uint8Array(data || []);
     }
 
-    // One byte always becomes exactly two colour blocks: six useful bits and
-    // two useful bits. The four unused bits in the second block are reserved.
+    // Pack bytes densely across six-bit tiles; this uses all six bits of the
+    // symbol instead of wasting four bits per byte.
     function bytesToValues(data, valueCount) {
         const bytes = asBytes(data);
         const values = [];
-        for (const byte of bytes) values.push((byte >>> 2) & 0x3f, byte & 0x3f);
+        let buffer = 0;
+        let bits = 0;
+        for (const byte of bytes) {
+            buffer = (buffer << 8) | byte;
+            bits += 8;
+            while (bits >= BITS_PER_VALUE) {
+                bits -= BITS_PER_VALUE;
+                values.push((buffer >> bits) & 0x3f);
+            }
+        }
+        if (bits) values.push((buffer << (BITS_PER_VALUE - bits)) & 0x3f);
         if (valueCount !== undefined) {
             while (values.length < valueCount) values.push(0);
             return values.slice(0, valueCount);
@@ -61,9 +72,16 @@
 
     function valuesToBytes(values, byteCount) {
         const result = [];
-        for (let offset = 0; offset + 1 < values.length; offset += 2) {
-            result.push(((values[offset] & 0x3f) << 2) | (values[offset + 1] & 0x03));
-            if (byteCount !== undefined && result.length >= byteCount) break;
+        let buffer = 0;
+        let bits = 0;
+        for (const value of values) {
+            buffer = (buffer << BITS_PER_VALUE) | (value & 0x3f);
+            bits += BITS_PER_VALUE;
+            while (bits >= 8) {
+                bits -= 8;
+                result.push((buffer >> bits) & 0xff);
+                if (byteCount !== undefined && result.length >= byteCount) return new Uint8Array(result.slice(0, byteCount));
+            }
         }
         return new Uint8Array(byteCount === undefined ? result : result.slice(0, byteCount));
     }
@@ -164,9 +182,14 @@
     }
 
     function drawBlock(ctx, col, row, value) {
-        const rgb = valueToRgb(value);
-        ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-        ctx.fillRect(GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+        if (!root.VEFTiles) throw new Error("VEF tile codec must load before the frame protocol");
+        root.VEFTiles.drawTile(
+            ctx,
+            GRID_OFFSET_X + col * BLOCK_SIZE,
+            GRID_OFFSET_Y + row * BLOCK_SIZE,
+            value,
+            BLOCK_SIZE,
+        );
     }
 
     function drawMarkers(ctx) {

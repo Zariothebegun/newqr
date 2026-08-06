@@ -28,45 +28,6 @@
         processing: false
     };
 
-    class ColorCalibrator {
-        constructor() {
-            this.samples = Array.from({ length: 3 }, () => Array.from({ length: 4 }, () => []));
-            this.centres = [P.LEVELS.slice(), P.LEVELS.slice(), P.LEVELS.slice()];
-            this.ready = false;
-        }
-
-        add(measured, value) {
-            const expected = P.valueToRgb(value);
-            for (let channel = 0; channel < 3; channel++) {
-                const level = P.LEVELS.indexOf(expected[channel]);
-                if (level >= 0) this.samples[channel][level].push(measured[channel]);
-            }
-        }
-
-        finish() {
-            for (let channel = 0; channel < 3; channel++) {
-                for (let level = 0; level < 4; level++) {
-                    const values = this.samples[channel][level];
-                    if (values.length) this.centres[channel][level] = values.reduce((a, b) => a + b, 0) / values.length;
-                }
-            }
-            this.ready = true;
-        }
-
-        decode(red, green, blue) {
-            const levels = [red, green, blue].map((value, channel) => {
-                let best = 0;
-                let distance = Infinity;
-                for (let level = 0; level < 4; level++) {
-                    const next = Math.abs(value - this.centres[channel][level]);
-                    if (next < distance) { best = level; distance = next; }
-                }
-                return best;
-            });
-            return levels[0] * 16 + levels[1] * 4 + levels[2];
-        }
-    }
-
     function log(message) {
         console.log("[VEF-3 receiver]", message);
         if (state.debug && $("debug-log")) $("debug-log").insertAdjacentHTML("beforeend", `<div>${message}</div>`);
@@ -204,9 +165,9 @@
         return [x / P.FRAME_WIDTH * imageData.width, y / P.FRAME_HEIGHT * imageData.height];
     }
 
-    function sampleIdeal(imageData, geometry, x, y) {
+    function sampleIdeal(imageData, geometry, x, y, radiusOverride = null) {
         const [centerX, centerY] = mapIdealToImage(geometry, imageData, x, y);
-        const radius = Math.max(1, Math.round(Math.min(imageData.width / P.FRAME_WIDTH, imageData.height / P.FRAME_HEIGHT) * 2));
+        const radius = radiusOverride ?? Math.max(1, Math.round(Math.min(imageData.width / P.FRAME_WIDTH, imageData.height / P.FRAME_HEIGHT) * 2));
         let red = 0, green = 0, blue = 0, count = 0;
         for (let dy = -radius; dy <= radius; dy += Math.max(1, Math.floor(radius / 2))) {
             for (let dx = -radius; dx <= radius; dx += Math.max(1, Math.floor(radius / 2))) {
@@ -236,21 +197,33 @@
         return sampleIdeal(imageData, geometry, P.GRID_OFFSET_X + (col + 0.5) * P.BLOCK_SIZE, P.GRID_OFFSET_Y + (row + 0.5) * P.BLOCK_SIZE);
     }
 
+    function sampleTile(imageData, geometry, col, row) {
+        const samples = [];
+        for (let cell = 0; cell < 16; cell++) {
+            const x = P.GRID_OFFSET_X + col * P.BLOCK_SIZE + (cell % 4 + 0.5) * 2;
+            const y = P.GRID_OFFSET_Y + row * P.BLOCK_SIZE + (Math.floor(cell / 4) + 0.5) * 2;
+            // One center sample per micro-cell keeps the mobile decoder below
+            // its camera frame budget; the cell itself is already 2x2 logical pixels.
+            samples.push(sampleIdeal(imageData, geometry, x, y, 1));
+        }
+        return samples;
+    }
+
     function readMetadata(imageData, geometry) {
         const values = [];
+        const rawCalibrator = new VEFTiles.ColourCalibrator();
         for (const row of P.METADATA_ROWS) for (let col = 0; col < P.FRAME_COLS; col++) {
-            const [r, g, b] = sampleGrid(imageData, geometry, col, row);
-            values.push(new ColorCalibrator().decode(r, g, b));
+            values.push(VEFTiles.decodeSamples(sampleTile(imageData, geometry, col, row), rawCalibrator).value);
         }
         return values;
     }
 
     function calibrateFull(imageData, geometry) {
-        const calibrator = new ColorCalibrator();
+        const calibrator = new VEFTiles.ColourCalibrator();
         const [startCol, startRow] = P.CALIBRATION_GRID;
         for (let value = 0; value < 64; value++) {
-            const colour = sampleGrid(imageData, geometry, startCol + value % 8, startRow + Math.floor(value / 8));
-            calibrator.add(colour, value);
+            const extracted = VEFTiles.extract(sampleTile(imageData, geometry, startCol + value % 8, startRow + Math.floor(value / 8)));
+            calibrator.add(extracted.colour, value & 3);
         }
         calibrator.finish();
         state.calibrator = calibrator;
@@ -260,9 +233,12 @@
     }
 
     function calibrateReferences(imageData, geometry) {
-        if (!state.calibrator) state.calibrator = new ColorCalibrator();
-        for (const [cell, value] of P.REFERENCE_VALUES.map((value, index) => [Array.from(P.REFERENCE_CELLS)[index], value])) {
-            state.calibrator.add(sampleGrid(imageData, geometry, cell % P.FRAME_COLS, Math.floor(cell / P.FRAME_COLS)), value);
+        if (!state.calibrator) state.calibrator = new VEFTiles.ColourCalibrator();
+        const cells = [...P.REFERENCE_CELLS];
+        for (let index = 0; index < cells.length; index++) {
+            const cell = cells[index];
+            const extracted = VEFTiles.extract(sampleTile(imageData, geometry, cell % P.FRAME_COLS, Math.floor(cell / P.FRAME_COLS)));
+            state.calibrator.add(extracted.colour, P.REFERENCE_VALUES[index] & 3);
         }
         state.calibrator.finish();
     }
@@ -320,13 +296,19 @@
         if (header.k < 1 || header.k > 65536 || header.blockLen < 1 || header.blockLen > P.PAYLOAD_BYTES || header.indices.length < 1) return;
         if (!state.transfer || state.transfer.sessionId !== header.sessionId || state.transfer.k !== header.k) createTransfer(header);
         if (header.seq % 30 === 0) calibrateReferences(imageData, geometry);
-        if (!state.calibrator) state.calibrator = new ColorCalibrator();
+        if (!state.calibrator) state.calibrator = new VEFTiles.ColourCalibrator();
 
         const values = [];
+        let uncertainTiles = 0;
         for (const [col, row] of P.DATA_POSITIONS) {
-            const [r, g, b] = sampleGrid(imageData, geometry, col, row);
-            values.push(state.calibrator.decode(r, g, b));
+            const decoded = VEFTiles.decodeSamples(sampleTile(imageData, geometry, col, row), state.calibrator);
+            if (!decoded.valid) uncertainTiles++;
+            values.push(decoded.value);
         }
+        // Fountain handles missing frames, not silently corrupted frames. A
+        // confidence gate is therefore safer than feeding a doubtful packet
+        // into the decoder; the next sequence will arrive shortly.
+        if (uncertainTiles > 80) return;
         const payload = P.valuesToBytes(values, header.blockLen);
         state.decoder.addPacket(header.seq, header.indices, payload);
         state.validFrames++;

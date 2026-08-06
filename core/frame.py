@@ -7,7 +7,6 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .color_codec import ColorCodec
 from .protocol import (
     BLOCK_SIZE,
     CALIBRATION_GRID,
@@ -30,6 +29,7 @@ from .protocol import (
     unpack_header,
     values_to_bytes,
 )
+from .tile_codec import ColourCalibrator, decode_samples, draw_tile
 
 CORNER_COLORS = {
     "TL": (0, 255, 0),
@@ -49,10 +49,8 @@ class FrameEncoder:
         self.frame_width = FRAME_WIDTH
         self.frame_height = FRAME_HEIGHT
 
-    def _draw_color_block(self, draw: ImageDraw.ImageDraw, col: int, row: int, color: Tuple[int, int, int]) -> None:
-        x = GRID_OFFSET_X + col * BLOCK_SIZE
-        y = GRID_OFFSET_Y + row * BLOCK_SIZE
-        draw.rectangle([x, y, x + BLOCK_SIZE - 1, y + BLOCK_SIZE - 1], fill=color)
+    def _draw_color_block(self, draw: ImageDraw.ImageDraw, col: int, row: int, value: int) -> None:
+        draw_tile(draw, GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE, value, BLOCK_SIZE)
 
     def _draw_corner_markers(self, draw: ImageDraw.ImageDraw) -> None:
         size = 48
@@ -89,11 +87,11 @@ class FrameEncoder:
                 draw,
                 start_col + value % 8,
                 start_row + value // 8,
-                ColorCodec.value_to_rgb(value),
+                value,
             )
         metadata = bytes_to_values(pack_header(calibration=True), METADATA_VALUES)
         for index, value in enumerate(metadata):
-            self._draw_color_block(draw, index % FRAME_COLS, METADATA_ROWS[index // FRAME_COLS], ColorCodec.value_to_rgb(value))
+            self._draw_color_block(draw, index % FRAME_COLS, METADATA_ROWS[index // FRAME_COLS], value)
         return image
 
     def render_data_frame(self, packet: dict, frame_index: int = 0) -> Image.Image:
@@ -110,11 +108,11 @@ class FrameEncoder:
 
         values = bytes_to_values(data, DATA_VALUES)
         for value, (col, row) in zip(values, DATA_POSITIONS):
-            self._draw_color_block(draw, col, row, ColorCodec.value_to_rgb(value))
+            self._draw_color_block(draw, col, row, value)
 
         if sequence % 30 == 0:
             for cell, value in zip(REFERENCE_CELLS, REFERENCE_VALUES):
-                self._draw_color_block(draw, cell % FRAME_COLS, cell // FRAME_COLS, ColorCodec.value_to_rgb(value))
+                self._draw_color_block(draw, cell % FRAME_COLS, cell // FRAME_COLS, value)
 
         header = pack_header(
             session_id=session_id,
@@ -128,7 +126,7 @@ class FrameEncoder:
         )
         metadata = bytes_to_values(header, METADATA_VALUES)
         for index, value in enumerate(metadata):
-            self._draw_color_block(draw, index % FRAME_COLS, METADATA_ROWS[index // FRAME_COLS], ColorCodec.value_to_rgb(value))
+            self._draw_color_block(draw, index % FRAME_COLS, METADATA_ROWS[index // FRAME_COLS], value)
         return image
 
 
@@ -137,44 +135,37 @@ class FrameDecoder:
 
     def __init__(self) -> None:
         self.calibrated = False
-        self.channel_centres = [[0, 85, 170, 255] for _ in range(3)]
+        self.calibrator = ColourCalibrator()
 
-    def _sample_block(self, image: Image.Image, col: int, row: int, block_size: int = BLOCK_SIZE) -> Tuple[int, int, int]:
-        x = GRID_OFFSET_X + col * BLOCK_SIZE + BLOCK_SIZE // 2
-        y = GRID_OFFSET_Y + row * BLOCK_SIZE + BLOCK_SIZE // 2
-        pixels = []
-        for dy in (-2, 0, 2):
-            for dx in (-2, 0, 2):
-                pixels.append(image.getpixel((x + dx, y + dy))[:3])
-        return tuple(sum(pixel[channel] for pixel in pixels) // len(pixels) for channel in range(3))
+    def _sample_tile(self, image: Image.Image, col: int, row: int, block_size: int = BLOCK_SIZE) -> list[Tuple[int, int, int]]:
+        samples = []
+        for cell in range(16):
+            x = GRID_OFFSET_X + col * BLOCK_SIZE + (cell % 4) * 2 + 1
+            y = GRID_OFFSET_Y + row * BLOCK_SIZE + (cell // 4) * 2 + 1
+            samples.append(image.getpixel((x, y))[:3])
+        return samples
 
     def calibrate(self, calibration_img: Image.Image, block_size: int = BLOCK_SIZE) -> None:
-        samples = [[[] for _ in range(4)] for _ in range(3)]
+        self.calibrator = ColourCalibrator()
         start_col, start_row = CALIBRATION_GRID
         for value in range(64):
-            measured = self._sample_block(calibration_img, start_col + value % 8, start_row + value // 8)
-            expected = ColorCodec.value_to_rgb(value)
-            for channel in range(3):
-                level = expected[channel] // 85
-                samples[channel][level].append(measured[channel])
-        for channel in range(3):
-            for level in range(4):
-                if samples[channel][level]:
-                    self.channel_centres[channel][level] = sum(samples[channel][level]) / len(samples[channel][level])
+            extracted = decode_samples(
+                self._sample_tile(calibration_img, start_col + value % 8, start_row + value // 8),
+                self.calibrator,
+            )
+            self.calibrator.add(extracted["colour"], value & 3)
+        self.calibrator.finish()
         self.calibrated = True
 
-    def _decode_color(self, rgb: Tuple[int, int, int]) -> int:
-        levels = []
-        for channel, value in enumerate(rgb):
-            levels.append(min(range(4), key=lambda level: abs(value - self.channel_centres[channel][level])))
-        return levels[0] * 16 + levels[1] * 4 + levels[2]
+    def _decode_tile(self, image: Image.Image, col: int, row: int) -> dict:
+        return decode_samples(self._sample_tile(image, col, row), self.calibrator)
 
     def decode_frame(self, image: Image.Image, block_size: int = BLOCK_SIZE) -> Optional[dict]:
-        values = [self._decode_color(self._sample_block(image, col, row)) for col, row in DATA_POSITIONS]
+        values = [self._decode_tile(image, col, row)["value"] for col, row in DATA_POSITIONS]
         metadata_values = []
         for row in METADATA_ROWS:
             for col in range(FRAME_COLS):
-                metadata_values.append(self._decode_color(self._sample_block(image, col, row)))
+                metadata_values.append(self._decode_tile(image, col, row)["value"])
         header = unpack_header(values_to_bytes(metadata_values, HEADER_BYTES))
         if not header or header.get("type") != "data":
             return None

@@ -192,6 +192,7 @@
         </div>
     </main>
 
+    <script src="/static/tile-codec.js"></script>
     <script src="/static/protocol.js"></script>
     <script src="/static/fountain.js"></script>
     <script>
@@ -239,7 +240,9 @@
                 $("packet-stat").textContent = state.encoder ? `K=${state.k}` : "—";
                 $("frame-stat").textContent = state.frameNumber ? String(state.frameNumber) : "—";
                 $("payload-stat").textContent = state.encoder ? `${BLOCK_LENGTH} B · ${P.DATA_VALUES} blocos` : "—";
-                $("rate-stat").textContent = `${$("fps").value} fps`;
+                const fps = Number($("fps").value);
+                const rawRate = (BLOCK_LENGTH * fps / 1024).toFixed(1);
+                $("rate-stat").textContent = `${fps} fps · ~${rawRate} KB/s`;
                 $("progress-bar").style.width = state.sequenceLimit ? `${(state.sequence / state.sequenceLimit) * 100}%` : "0";
             }
 

@@ -118,7 +118,7 @@ Cada frame é uma imagem de **800×600 pixéis** com uma grelha de 80×50 = 4000
 ┌────────────────────────────────────────────┐
 │   L verde                         L vermelho│
 │                                            │
-│       80 × 50 blocos de cor sólida          │
+│       80 × 50 tiles de símbolo + cor        │
 │       cada bloco tem 8 × 8 pixéis           │
 │                                            │
 │       L azul                 L amarelo       │
@@ -128,11 +128,11 @@ Cada frame é uma imagem de **800×600 pixéis** com uma grelha de 80×50 = 4000
 
 ### Codificação de Cores
 
-Cada bloco codifica **6 bits** usando cor RGB:
-- 4 níveis por canal (0, 85, 170, 255)
-- 64 cores possíveis por bloco
-- cada byte do pacote ocupa dois blocos: os 6 bits altos e os 2 bits baixos
-- os quatro bits restantes do segundo bloco ficam reservados
+Cada tile codifica **6 bits** usando duas camadas:
+- um padrão 4×4 de alto contraste escolhe um de 16 símbolos;
+- uma de 4 cores calibradas acrescenta 2 bits;
+- 16 símbolos × 4 cores = 64 valores por tile;
+- os padrões internos são usados para rejeitar tiles desfocados antes do Fountain Decoder.
 
 ### Capacidade
 
@@ -141,8 +141,8 @@ Cada bloco codifica **6 bits** usando cor RGB:
 | Blocos totais por frame | 4000 |
 | Blocos de dados | 3836 |
 | Bits por bloco | 6 |
-| Payload máximo por frame | 1918 bytes |
-| Pacote Fountain | 1 KB |
+| Payload máximo teórico por frame | 2877 bytes |
+| Pacote Fountain | 2877 bytes (ajustável) |
 | 30 fps (sem overhead) | ~56 KB/s |
 | 60 fps (sem overhead) | ~112 KB/s |
 
@@ -164,6 +164,7 @@ newqr/
 │   ├── color_codec.py       # Codificação de bytes para cores
 │   ├── fountain.py          # Fountain Codes (LT codes)
 │   ├── frame.py             # Renderização 800×600 dos frames
+│   ├── tile_codec.py        # 16 símbolos × 4 cores
 │   └── protocol.py          # Formato comum Python/JavaScript
 ├── encoder/                 # Encoder (computador)
 │   ├── __init__.py
