@@ -1,103 +1,49 @@
 """
-VEF-3 CORE - WSGI Application for Render Deployment
-Serves the decoder web interface and optionally the encoder API.
+VEF-3 CORE - WSGI Server for Render
+Simple WSGI application.
 """
 
 import os
 from pathlib import Path
-from werkzeug.wsgi import DispatcherMiddleware
-from werkzeug.serving import run_simple
 
 
 def create_app():
-    """Create the WSGI application."""
-    from werkzeug.wrappers import Request, Response
-    from werkzeug.exceptions import HTTPException
-    import json
-    
-    # Get the base directory
+    """Create WSGI application."""
     BASE_DIR = Path(__file__).parent
     DECODER_DIR = BASE_DIR / 'decoder'
     
-    @Request.application
-    def application(request):
-        """Main application dispatcher."""
-        path = request.path
+    def app(environ, start_response):
+        path = environ.get('PATH_INFO', '/')
         
-        # CORS headers for all responses
-        headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
-        }
+        # CORS headers
+        headers = [
+            ('Access-Control-Allow-Origin', '*'),
+            ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
+        ]
         
-        if request.method == 'OPTIONS':
-            return Response('', status=200, headers=headers)
-        
-        # Root path - serve decoder
         if path == '/' or path == '/index.html':
-            index_path = DECODER_DIR / 'index.html'
-            if index_path.exists():
-                with open(index_path, 'r') as f:
+            index_file = DECODER_DIR / 'index.html'
+            if index_file.exists():
+                with open(index_file, 'r') as f:
                     content = f.read()
-                return Response(content, mimetype='text/html', headers=headers)
-            return Response('Decoder not found', status=404)
+                start_response('200 OK', headers + [('Content-Type', 'text/html')])
+                return [content.encode()]
         
-        # Health check
         if path == '/health':
-            return Response(json.dumps({
-                'status': 'ok',
-                'service': 'VEF-3 Decoder',
-                'version': '1.0.0'
-            }), mimetype='application/json', headers=headers)
+            start_response('200 OK', headers + [('Content-Type', 'application/json')])
+            return [b'{"status": "ok", "service": "VEF-3 Decoder"}']
         
-        # Serve static files from decoder directory
-        if path.startswith('/static/') or path.startswith('/assets/'):
-            file_path = DECODER_DIR / path.lstrip('/')
-            if file_path.exists() and file_path.is_file():
-                # Determine mimetype
-                ext = file_path.suffix.lower()
-                mimetypes = {
-                    '.html': 'text/html',
-                    '.js': 'application/javascript',
-                    '.css': 'text/css',
-                    '.png': 'image/png',
-                    '.jpg': 'image/jpeg',
-                    '.gif': 'image/gif',
-                    '.svg': 'image/svg+xml',
-                    '.json': 'application/json',
-                    '.woff': 'font/woff',
-                    '.woff2': 'font/woff2',
-                }
-                mimetype = mimetypes.get(ext, 'application/octet-stream')
-                
-                with open(file_path, 'rb') as f:
-                    return Response(f.read(), mimetype=mimetype, headers=headers)
-        
-        # API endpoints
-        if path == '/api/info':
-            return Response(json.dumps({
-                'name': 'VEF-3 CORE Decoder API',
-                'version': '1.0.0',
-                'description': 'Visual Encoding File Transfer - Decoder Service',
-                'endpoints': {
-                    '/health': 'Health check',
-                    '/api/info': 'This info',
-                    '/api/generate': 'Generate test frames (POST)'
-                }
-            }), mimetype='application/json', headers=headers)
-        
-        # 404 for everything else
-        return Response('Not Found', status=404, headers=headers)
+        # 404
+        start_response('404 Not Found', headers)
+        return [b'Not Found']
     
-    return application
+    return app
 
 
-# Create app instance
 app = create_app()
 
 
 if __name__ == '__main__':
-    # Development server
+    from werkzeug.serving import run_simple
     port = int(os.environ.get('PORT', 5000))
-    run_simple('0.0.0.0', port, app, use_debugger=True, use_reloader=True)
+    run_simple('0.0.0.0', port, app)
