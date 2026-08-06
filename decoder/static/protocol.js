@@ -181,15 +181,20 @@
         return (crc ^ 0xffffffff) >>> 0;
     }
 
-    function drawBlock(ctx, col, row, value) {
-        if (!root.VEFTiles) throw new Error("VEF tile codec must load before the frame protocol");
-        root.VEFTiles.drawTile(
-            ctx,
-            GRID_OFFSET_X + col * BLOCK_SIZE,
-            GRID_OFFSET_Y + row * BLOCK_SIZE,
-            value,
-            BLOCK_SIZE,
-        );
+    function renderCells(canvas, cells) {
+        const ctx = prepareCanvas(canvas);
+        const image = ctx.createImageData(FRAME_WIDTH, FRAME_HEIGHT);
+        image.data.fill(0);
+        for (let row = 0; row < FRAME_ROWS; row++) for (let col = 0; col < FRAME_COLS; col++) {
+            root.VEFTiles.paintTile(image.data, FRAME_WIDTH, GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE, cells[row * FRAME_COLS + col]);
+        }
+        ctx.putImageData(image, 0, 0);
+        drawMarkers(ctx);
+    }
+
+    function metadataCells(cells, header) {
+        const values = bytesToValues(header, METADATA_VALUES);
+        for (let i = 0; i < values.length; i++) cells[METADATA_ROWS[Math.floor(i / FRAME_COLS)] * FRAME_COLS + (i % FRAME_COLS)] = values[i];
     }
 
     function drawMarkers(ctx) {
@@ -215,42 +220,23 @@
         return canvas.getContext("2d", { alpha: false });
     }
 
-    function drawMetadata(ctx, header) {
-        const values = bytesToValues(header, METADATA_VALUES);
-        for (let i = 0; i < values.length; i++) {
-            const row = METADATA_ROWS[Math.floor(i / FRAME_COLS)];
-            drawBlock(ctx, i % FRAME_COLS, row, values[i]);
-        }
-    }
-
     function drawCalibrationFrame(canvas) {
-        const ctx = prepareCanvas(canvas);
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-        drawMarkers(ctx);
+        const cells = new Uint8Array(FRAME_COLS * FRAME_ROWS);
         const [startCol, startRow] = CALIBRATION_GRID;
-        for (let value = 0; value < 64; value++) {
-            drawBlock(ctx, startCol + value % CALIBRATION_GRID_SIZE, startRow + Math.floor(value / CALIBRATION_GRID_SIZE), value);
-        }
-        drawMetadata(ctx, packHeader({ calibration: true }));
+        for (let value = 0; value < 64; value++) cells[(startRow + Math.floor(value / CALIBRATION_GRID_SIZE)) * FRAME_COLS + startCol + value % CALIBRATION_GRID_SIZE] = value;
+        metadataCells(cells, packHeader({ calibration: true }));
+        renderCells(canvas, cells);
     }
 
     function drawDataFrame(canvas, payload, header, seq) {
-        const ctx = prepareCanvas(canvas);
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, FRAME_WIDTH, FRAME_HEIGHT);
-        drawMarkers(ctx);
+        const cells = new Uint8Array(FRAME_COLS * FRAME_ROWS);
         const values = bytesToValues(payload, DATA_VALUES);
         for (let i = 0; i < DATA_POSITIONS.length; i++) {
-            const [col, row] = DATA_POSITIONS[i];
-            drawBlock(ctx, col, row, values[i]);
+            const [col, row] = DATA_POSITIONS[i]; cells[row * FRAME_COLS + col] = values[i];
         }
-        if ((seq % 30) === 0) {
-            REFERENCE_CELLS.forEach((cell, index) => {
-                drawBlock(ctx, cell % FRAME_COLS, Math.floor(cell / FRAME_COLS), REFERENCE_VALUES[index]);
-            });
-        }
-        drawMetadata(ctx, header);
+        if ((seq % 30) === 0) REFERENCE_CELLS.forEach((cell, index) => { cells[cell] = REFERENCE_VALUES[index]; });
+        metadataCells(cells, header);
+        renderCells(canvas, cells);
     }
 
     root.VEFProtocol = {

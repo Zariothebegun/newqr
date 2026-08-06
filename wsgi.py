@@ -195,7 +195,10 @@ def create_app() -> Callable:
                     asset.read_bytes(),
                     content_type,
                     method,
-                    (("Cache-Control", "public, max-age=3600"),),
+                    # Asset URLs carry a small version token while the
+                    # protocol is iterated; no-cache also prevents a stale
+                    # tile codec from making the screen look like the old one.
+                    (("Cache-Control", "no-cache"),),
                 )
 
         return _finish(

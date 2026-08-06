@@ -44,7 +44,44 @@
 
     function colour(value) { return COLORS[value & 3]; }
 
+    const tileCache = new Array(64);
+
+    function cachedTile(value) {
+        const key = value & 63;
+        if (tileCache[key]) return tileCache[key];
+        const pixels = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
+        const pattern = PATTERNS[(key >>> 2) & 15];
+        const rgb = colour(key);
+        for (let cell = 0; cell < MICRO_COUNT; cell++) {
+            const on = (pattern >>> cell) & 1;
+            for (let dy = 0; dy < MICRO_SIZE; dy++) for (let dx = 0; dx < MICRO_SIZE; dx++) {
+                const x = (cell % 4) * MICRO_SIZE + dx;
+                const y = Math.floor(cell / 4) * MICRO_SIZE + dy;
+                const offset = (y * TILE_SIZE + x) * 4;
+                pixels[offset] = on ? rgb[0] : 0;
+                pixels[offset + 1] = on ? rgb[1] : 0;
+                pixels[offset + 2] = on ? rgb[2] : 0;
+                pixels[offset + 3] = 255;
+            }
+        }
+        tileCache[key] = pixels;
+        return pixels;
+    }
+
+    function paintTile(buffer, stride, x, y, value) {
+        const tile = cachedTile(value);
+        for (let row = 0; row < TILE_SIZE; row++) {
+            const source = tile.subarray(row * TILE_SIZE * 4, (row + 1) * TILE_SIZE * 4);
+            buffer.set(source, ((y + row) * stride + x) * 4);
+        }
+    }
+
     function drawTile(ctx, x, y, value, tileSize = TILE_SIZE) {
+        if (tileSize === TILE_SIZE && ctx.canvas && ctx.canvas.width >= x + TILE_SIZE) {
+            const image = new ImageData(cachedTile(value), TILE_SIZE, TILE_SIZE);
+            ctx.putImageData(image, x, y);
+            return;
+        }
         const pattern = PATTERNS[(value >>> 2) & 15];
         const rgb = colour(value);
         const micro = tileSize / 4;
@@ -144,6 +181,8 @@
         PATTERNS,
         PATTERN_INDEX,
         drawTile,
+        paintTile,
+        cachedTile,
         extract,
         decodeSamples,
         ColourCalibrator

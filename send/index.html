@@ -1,518 +1,169 @@
 <!doctype html>
 <html lang="pt-PT">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>VEF-3 — Enviar ficheiro</title>
-    <style>
-        :root {
-            color-scheme: dark;
-            --bg: #080b12;
-            --panel: #111827;
-            --panel-2: #172033;
-            --line: #26334b;
-            --text: #f5f7fb;
-            --muted: #9aa8bd;
-            --accent: #39f5a2;
-            --accent-2: #50b8ff;
-            --danger: #ff7b86;
-        }
-
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: radial-gradient(circle at top, #15223a 0, var(--bg) 55%);
-            color: var(--text);
-            font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }
-        a { color: var(--accent); }
-        .page { max-width: 1080px; margin: 0 auto; padding: 24px; }
-        nav { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 30px; }
-        nav strong { letter-spacing: .04em; }
-        nav .links { display: flex; gap: 16px; font-size: .9rem; }
-        h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.05; }
-        h2 { margin: 0 0 8px; }
-        .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .15em; font-size: .75rem; font-weight: 700; }
-        .lead { max-width: 650px; color: var(--muted); margin: 0 0 24px; }
-        .layout { display: grid; grid-template-columns: minmax(260px, 350px) 1fr; gap: 18px; align-items: start; }
-        .panel { background: rgba(17,24,39,.88); border: 1px solid var(--line); border-radius: 18px; padding: 20px; box-shadow: 0 16px 50px rgba(0,0,0,.22); }
-        .panel + .panel { margin-top: 18px; }
-        .dropzone {
-            border: 1px dashed #4b6385; border-radius: 14px; padding: 24px 16px; text-align: center;
-            cursor: pointer; background: rgba(80,184,255,.05); transition: .2s ease;
-        }
-        .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(57,245,162,.1); }
-        .dropzone input { display: none; }
-        .drop-icon { display: block; font-size: 2.4rem; margin-bottom: 8px; }
-        .dropzone strong { display: block; }
-        .muted { color: var(--muted); font-size: .88rem; }
-        .file-card { display: none; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--panel-2); }
-        .file-card.visible { display: block; }
-        .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-        .file-size { color: var(--muted); font-size: .85rem; }
-        label { display: block; color: var(--muted); font-size: .85rem; margin: 18px 0 6px; }
-        select, input[type="url"], button {
-            width: 100%; border-radius: 10px; border: 1px solid var(--line); padding: 11px 13px;
-            background: var(--panel-2); color: var(--text); font: inherit;
-        }
-        input[type="url"] { margin-top: 12px; color: var(--muted); }
-        button { cursor: pointer; font-weight: 700; }
-        button:hover:not(:disabled) { border-color: var(--accent); }
-        button:disabled { opacity: .45; cursor: not-allowed; }
-        .primary { color: #04120d; background: var(--accent); border-color: var(--accent); margin-top: 20px; }
-        .secondary { margin-top: 10px; }
-        .danger { color: #ffdfe2; border-color: #70323d; }
-        .note { color: var(--muted); font-size: .82rem; margin: 14px 0 0; }
-        .stage-panel { padding: 14px; }
-        .stage-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin: 4px 4px 12px; }
-        .stage-head h2 { font-size: 1.05rem; }
-        .status { color: var(--accent); font-size: .86rem; text-align: right; }
-        .screen {
-            position: relative; min-height: 380px; display: grid; place-items: center; overflow: hidden;
-            border-radius: 12px; background: #000; border: 1px solid #2a3850;
-        }
-        #sender-canvas { width: 100%; height: auto; max-height: 70vh; object-fit: contain; image-rendering: pixelated; display: none; }
-        .empty-screen { padding: 60px 24px; text-align: center; color: #71809a; }
-        .empty-screen .big { font-size: 3.5rem; display: block; }
-        .screen.sending { min-height: 0; }
-        .screen.sending #sender-canvas { display: block; }
-        .screen.sending .empty-screen { display: none; }
-        .screen-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
-        .stat { background: var(--panel-2); border-radius: 10px; padding: 9px; min-width: 0; }
-        .stat small { display: block; color: var(--muted); font-size: .72rem; }
-        .stat strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .progress { height: 9px; border-radius: 99px; background: #26334b; overflow: hidden; margin-top: 15px; }
-        .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .15s linear; }
-        .how { margin-top: 18px; color: var(--muted); font-size: .9rem; }
-        .how ol { margin: 8px 0 0; padding-left: 20px; }
-        code { color: var(--accent); }
-        @media (max-width: 760px) {
-            .page { padding: 16px; }
-            nav { margin-bottom: 22px; }
-            nav .links { gap: 9px; }
-            .layout { grid-template-columns: 1fr; }
-            .screen { min-height: 260px; }
-            .stats { grid-template-columns: repeat(2, 1fr); }
-        }
-        body.fullscreen-mode { background: #000; overflow: hidden; }
-        body.fullscreen-mode .page > *:not(.stage-panel), body.fullscreen-mode .stage-head,
-        body.fullscreen-mode .screen-controls, body.fullscreen-mode .stats,
-        body.fullscreen-mode .progress { display: none; }
-        body.fullscreen-mode .page, body.fullscreen-mode .layout, body.fullscreen-mode .stage-panel,
-        body.fullscreen-mode .screen { max-width: none; width: 100vw; height: 100vh; margin: 0; padding: 0; border: 0; border-radius: 0; }
-        body.fullscreen-mode .screen.sending #sender-canvas { width: 100vw; height: 100vh; max-height: none; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>VEF-3 Optical Transfer — enviar</title>
+    <link rel="stylesheet" href="/static/decimen-style.css?v=tiles-2">
 </head>
-<body>
-    <main class="page">
-        <nav>
-            <strong>VEF-3 CORE</strong>
-            <div class="links"><a href="/send/">Enviar</a><a href="/receive/">Receber</a></div>
+<body class="tool-page">
+    <header class="site-header">
+        <a class="brand" href="/">VEF-3 Optical Transfer</a>
+        <nav class="mode-nav" aria-label="Modo">
+            <a href="/send/" aria-current="page">Enviar</a>
+            <a href="/receive/">Receber</a>
         </nav>
+    </header>
 
-        <section>
-            <div class="eyebrow">Ecrã → câmara</div>
-            <h1>Enviar um ficheiro</h1>
-            <p class="lead">Escolhe um ficheiro, carrega em iniciar e mostra esta tela ao telemóvel. Os blocos coloridos são criados no teu navegador; o ficheiro não é enviado para o servidor.</p>
+    <main class="send-shell">
+        <section class="tool-intro">
+            <p class="eyebrow">Ecrã → câmara</p>
+            <h1 id="tool-title">Enviar um ficheiro</h1>
+            <p>Nada sai deste dispositivo até ser lido por um receiver.</p>
         </section>
 
-        <div class="layout">
-            <section>
-                <div class="panel">
-                    <label class="dropzone" id="dropzone" for="file-input">
-                        <input id="file-input" type="file">
-                        <span class="drop-icon">📄</span>
-                        <strong>Escolher ficheiro</strong>
-                        <span class="muted">ou arrastar para aqui · máximo 64 MB</span>
-                    </label>
-                    <div id="file-card" class="file-card">
-                        <div id="file-name" class="file-name"></div>
-                        <div id="file-size" class="file-size"></div>
-                    </div>
-                    <button id="hello-btn" class="secondary">🧪 Criar teste "hello.txt"</button>
-
-                    <label for="fps">Velocidade dos blocos</label>
-                    <select id="fps">
-                        <option value="10">10 fps — mais fácil de ler</option>
-                        <option value="15">15 fps</option>
-                        <option value="24">24 fps</option>
-                        <option value="30" selected>30 fps</option>
-                        <option value="60">60 fps — mais rápido</option>
-                    </select>
-
-                    <button id="start-btn" class="primary" disabled>▶ Iniciar transferência</button>
-                    <button id="video-btn" class="secondary" disabled>🎞 Gerar vídeo offline</button>
-                    <button id="pause-btn" class="secondary" disabled>Ⅱ Pausar</button>
-                    <button id="fullscreen-btn" class="secondary" disabled>⛶ Ecrã inteiro</button>
-                    <button id="reset-btn" class="secondary danger">Limpar ficheiro</button>
-                    <p class="note">O vídeo é gerado neste dispositivo. Guarda-o e reproduz noutro ecrã; os dispositivos não precisam de estar ligados entre si.</p>
-                </div>
-
-                <div class="panel share-panel">
-                    <h2 style="font-size: 1.05rem;">🔗 Partilhar o receptor</h2>
-                    <p class="note">Envia este link para a outra pessoa abrir a página que lê os blocos.</p>
-                    <input id="receiver-link" type="url" readonly>
-                    <div class="screen-controls">
-                        <button id="copy-link-btn" class="secondary">Copiar link</button>
-                        <button id="share-link-btn" class="secondary">Partilhar…</button>
-                    </div>
-                    <div id="share-status" class="muted" style="margin-top: 8px;"></div>
-                </div>
-
-                <div class="panel how">
-                    <strong>Como usar</strong>
-                    <ol>
-                        <li>Abre <a href="/receive/">Receber</a> no telemóvel e inicia a câmara.</li>
-                        <li>Seleciona o ficheiro nesta página.</li>
-                        <li>Inicia a transferência e mostra os blocos ao telemóvel.</li>
-                        <li>Deixa repetir até o receptor chegar a 100%.</li>
-                    </ol>
-                </div>
-            </section>
-
-            <section class="panel stage-panel">
-                <div class="stage-head">
-                    <h2>Vídeo de blocos</h2>
-                    <div id="status" class="status">Escolhe um ficheiro para começar</div>
-                </div>
-                <div id="screen" class="screen">
-                    <div class="empty-screen"><span class="big">▦</span>Os blocos aparecem aqui</div>
-                    <canvas id="sender-canvas" aria-label="Blocos de transferência visual"></canvas>
-                </div>
-                <div class="stats">
-                    <div class="stat"><small>Pacote</small><strong id="packet-stat">—</strong></div>
-                    <div class="stat"><small>Frames</small><strong id="frame-stat">—</strong></div>
-                    <div class="stat"><small>Dados por frame</small><strong id="payload-stat">—</strong></div>
-                    <div class="stat"><small>Velocidade</small><strong id="rate-stat">—</strong></div>
-                </div>
-                <div class="progress" aria-label="progresso"><div id="progress-bar"></div></div>
-            </section>
+        <div class="mode-picker" id="mode-picker" role="radiogroup" aria-label="O que enviar">
+            <label><input type="radio" name="send-mode" value="file" checked><span>Ficheiro</span></label>
+            <label><input type="radio" name="send-mode" value="snippet"><span>Texto</span></label>
         </div>
+
+        <label class="file-picker" id="pane-file">
+            <span class="file-picker-button" id="file-picker-button">Escolher ficheiro</span>
+            <span class="file-picker-text" id="file-picker-label">Qualquer ficheiro · até 64 MB</span>
+            <input id="cfg-file" type="file">
+        </label>
+
+        <div class="note-composer" id="pane-snippet" hidden>
+            <label for="snippet-text" id="snippet-label">Texto para enviar · até 4 MB</label>
+            <textarea id="snippet-text" rows="7" placeholder="Cola aqui um URL, texto ou configuração…"></textarea>
+            <button id="send-snippet" type="button">Iniciar stream de texto</button>
+        </div>
+
+        <div class="stage" id="stage" hidden>
+            <canvas id="sender-canvas" width="800" height="600" aria-label="Stream óptico VEF-3"></canvas>
+        </div>
+
+        <details class="settings">
+            <summary>Definições da transferência</summary>
+            <div class="row">
+                <label>tx fps
+                    <select id="cfg-fps">
+                        <option value="10">10</option><option value="15">15</option><option value="20">20</option>
+                        <option value="24">24</option><option value="30" selected>30</option><option value="60">60</option>
+                    </select>
+                </label>
+                <label>bytes / frame
+                    <select id="cfg-bytes">
+                        <option value="1024">1024</option>
+                        <option value="1918">1918</option>
+                        <option value="2877" selected>2877</option>
+                    </select>
+                </label>
+                <label>robustez
+                    <select id="cfg-ecc"><option>Seguro</option><option selected>Equilibrado</option><option>Rápido</option></select>
+                </label>
+                <label>tamanho do ecrã
+                    <input id="cfg-size" type="range" min="300" max="1200" step="50" value="900">
+                </label>
+            </div>
+            <dl class="stream-specs" id="stream-specs" hidden>
+                <div><dt>tx rate</dt><dd id="spec-fps">—</dd></div>
+                <div><dt>frame payload</dt><dd id="spec-frame">—</dd></div>
+                <div><dt>formato</dt><dd id="spec-qr">tiles 16×4</dd></div>
+                <div><dt>enviando</dt><dd id="spec-payload">—</dd></div>
+                <div><dt>compressão</dt><dd id="spec-compression">—</dd></div>
+                <div><dt>fountain K</dt><dd id="spec-k">—</dd></div>
+            </dl>
+        </details>
+
+        <div class="hint status-line" id="specs">Escolhe um ficheiro para começar</div>
+
+        <dialog class="help-dialog share-dialog" id="share-dialog" aria-labelledby="share-title">
+            <h2 id="share-title">Partilhar o receiver</h2>
+            <p class="share-hint">Envia este link para o outro dispositivo abrir o leitor.</p>
+            <div class="share-url-row">
+                <input id="receiver-link" readonly aria-label="Link do receiver">
+                <button id="copy-link-btn" class="secondary-button" type="button">Copiar</button>
+            </div>
+            <div class="note-actions">
+                <button id="share-link-btn" class="secondary-button" type="button">Partilhar…</button>
+                <button id="share-close-btn" class="secondary-button" type="button">Fechar</button>
+            </div>
+            <p id="share-status" class="hint"></p>
+        </dialog>
+        <p class="hint footer-hint" id="footer-hint" hidden>Abre Receber no outro dispositivo e aumenta o brilho deste ecrã.</p>
     </main>
 
-    <script src="/static/tile-codec.js"></script>
-    <script src="/static/protocol.js"></script>
-    <script src="/static/fountain.js"></script>
+    <footer class="site-footer">
+        <span class="footer-id"><span>VEF-3 Optical Transfer</span><span>tiles calibrados · Fountain Codes · sem rede</span></span>
+        <nav class="footer-links"><a href="/">Início</a><a href="/receive/">Receiver</a></nav>
+    </footer>
+
+    <script src="/static/tile-codec.js?v=tiles-2"></script>
+    <script src="/static/protocol.js?v=tiles-2"></script>
+    <script src="/static/fountain.js?v=tiles-2"></script>
     <script>
-        (() => {
-            "use strict";
-            const P = window.VEFProtocol;
-            const F = window.VEFFountain;
-            const MAX_FILE_SIZE = 64 * 1024 * 1024;
-            const CALIBRATION_FRAMES = 3;
-            const BLOCK_LENGTH = P.FOUNTAIN_BLOCK_SIZE;
-            const $ = id => document.getElementById(id);
-            const state = {
-                file: null,
-                data: null,
-                sessionId: 0,
-                fileCrc32: 0,
-                encoder: null,
-                k: 0,
-                sequenceLimit: 0,
-                sequence: 0,
-                calibrationLeft: 0,
-                frameNumber: 0,
-                cycle: 0,
-                running: false,
-                generating: false,
-                animationFrame: null,
-                lastDraw: 0
-            };
+    (() => {
+        "use strict";
+        const P = window.VEFProtocol, F = window.VEFFountain;
+        const $ = id => document.getElementById(id);
+        const MAX_FILE = 64 * 1024 * 1024, MAX_TEXT = 4 * 1024 * 1024;
+        const CAL_FRAMES = 3;
+        const state = { file: null, data: null, mode: "file", running: false, generation: 0, raf: 0, last: 0, session: 0, encoder: null, seq: 0, k: 0, blockLen: P.FOUNTAIN_BLOCK_SIZE, frame: 0, calLeft: 0 };
 
-            function formatBytes(bytes) {
-                if (bytes < 1024) return `${bytes} B`;
-                const units = ["KB", "MB", "GB"];
-                let value = bytes;
-                let unit = -1;
-                do { value /= 1024; unit++; } while (value >= 1024 && unit < units.length - 1);
-                return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
+        const formatBytes = n => { if (n < 1024) return `${n} B`; let v=n,u=0; const units=["KB","MB","GB"]; while(v>=1024&&u<2){v/=1024;u++;} return `${v.toFixed(v>=10?0:1)} ${units[u]}`; };
+        function status(text, error=false) { $("specs").textContent=text; $("specs").classList.toggle("error",error); }
+        function updateStats() {
+            const fps=Number($("cfg-fps").value), rate=state.blockLen*fps/1024;
+            $("spec-fps").textContent=`${fps} fps · ~${rate.toFixed(1)} KB/s`;
+            $("spec-frame").textContent=state.blockLen ? `${state.blockLen} B` : "—";
+            $("spec-qr").textContent="tiles 16×4 · 64 valores";
+            $("spec-payload").textContent=state.file ? `${state.file.name} · ${formatBytes(state.data.length)}` : "—";
+            $("spec-compression").textContent="Fountain + calibração";
+            $("spec-k").textContent=state.k ? String(state.k) : "—";
+        }
+        function stopStream() {
+            state.generation++; state.running=false; cancelAnimationFrame(state.raf); state.file=null; state.data=null; state.encoder=null; state.k=0; state.seq=0; state.frame=0;
+            $("stage").hidden=true; $("stream-specs").hidden=true; $("footer-hint").hidden=true; $("cfg-file").value="";
+            $("file-picker-button").textContent="Escolher ficheiro"; $("file-picker-label").textContent="Qualquer ficheiro · até 64 MB"; $("pane-file").classList.remove("has-file");
+            status("Escolhe um ficheiro para começar"); updateStats();
+        }
+        function makeSession() { return crypto.getRandomValues ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.random()*0xffffffff>>>0; }
+        async function arm(name,type,bytes) {
+            if (!bytes.length) { status("Escolhe um ficheiro não vazio",true); return; }
+            if (bytes.length>MAX_FILE) { status("O ficheiro ultrapassa 64 MB",true); return; }
+            state.file={name,type}; state.data=bytes; state.session=makeSession(); state.blockLen=Math.min(Number($("cfg-bytes").value),P.PAYLOAD_BYTES); state.encoder=new F.FountainEncoder(bytes,state.blockLen,state.session); state.k=state.encoder.k; state.seq=0; state.frame=0; state.calLeft=CAL_FRAMES;
+            $("pane-file").classList.add("has-file"); $("file-picker-button").textContent="Parar transferência"; $("file-picker-label").textContent=`${name} · ${formatBytes(bytes.length)}`;
+            await startStream(true);
+        }
+        async function selectFile(file) { if(!file)return; status(`A preparar ${file.name}…`); arm(file.name,file.type,new Uint8Array(await file.arrayBuffer())); }
+        async function selectText() { const text=$("snippet-text").value; const bytes=new TextEncoder().encode(text); await arm("text.txt","text/plain",bytes); }
+        function drawNext() {
+            const canvas=$("sender-canvas");
+            if(state.calLeft>0) { P.drawCalibrationFrame(canvas); state.calLeft--; }
+            else {
+                const packet=state.encoder.packet(state.seq);
+                const header=P.packHeader({sessionId:state.session,seq:state.seq,k:state.k,blockLen:state.blockLen,totalLen:state.data.length,fileCrc32:P.crc32(state.data),indices:packet.indices,filename:state.file.name});
+                P.drawDataFrame(canvas,packet.data,header,state.seq); state.seq++;
+                if(state.seq%30===0) status("A enviar · recalibração automática"); else status("A enviar · aponta para os tiles");
             }
-
-            function setStatus(text, error = false) {
-                $("status").textContent = text;
-                $("status").style.color = error ? "var(--danger)" : "var(--accent)";
-            }
-
-            function updateStats() {
-                $("packet-stat").textContent = state.encoder ? `K=${state.k}` : "—";
-                $("frame-stat").textContent = state.frameNumber ? String(state.frameNumber) : "—";
-                $("payload-stat").textContent = state.encoder ? `${BLOCK_LENGTH} B · ${P.DATA_VALUES} blocos` : "—";
-                const fps = Number($("fps").value);
-                const rawRate = (BLOCK_LENGTH * fps / 1024).toFixed(1);
-                $("rate-stat").textContent = `${fps} fps · ~${rawRate} KB/s`;
-                $("progress-bar").style.width = state.sequenceLimit ? `${(state.sequence / state.sequenceLimit) * 100}%` : "0";
-            }
-
-            function makeSessionId() {
-                if (window.crypto && crypto.getRandomValues) return crypto.getRandomValues(new Uint32Array(1))[0];
-                return Math.floor(Math.random() * 0xffffffff) >>> 0;
-            }
-
-            function createHelloFile() {
-                chooseFile(new File([new TextEncoder().encode("hello")], "hello.txt", { type: "text/plain" }));
-            }
-
-            function chooseFile(file) {
-                if (!file) return;
-                if (file.size > MAX_FILE_SIZE) {
-                    setStatus("O ficheiro excede o limite de 64 MB", true);
-                    return;
-                }
-                const reader = new FileReader();
-                reader.onerror = () => setStatus("Não foi possível ler o ficheiro", true);
-                reader.onload = () => {
-                    state.file = file;
-                    state.data = new Uint8Array(reader.result);
-                    state.sessionId = makeSessionId();
-                    state.fileCrc32 = P.crc32(state.data);
-                    state.encoder = new F.FountainEncoder(state.data, BLOCK_LENGTH, state.sessionId);
-                    state.k = state.encoder.k;
-                    // First K frames are systematic blocks. About 5% extra frames are
-                    // XOR equations, matching the intended ~1.05× Fountain overhead.
-                    state.sequenceLimit = state.k + Math.max(8, Math.ceil(state.k * 0.05));
-                    state.sequence = 0;
-                    state.frameNumber = 0;
-                    state.calibrationLeft = CALIBRATION_FRAMES;
-                    state.cycle = 0;
-                    $("file-name").textContent = file.name;
-                    $("file-size").textContent = `${formatBytes(file.size)} · CRC ${state.fileCrc32.toString(16).padStart(8, "0")} · K=${state.k}`;
-                    $("file-card").classList.add("visible");
-                    $("start-btn").disabled = false;
-                    $("video-btn").disabled = false;
-                    $("fullscreen-btn").disabled = false;
-                    setStatus("Pronto para iniciar — Fountain Codes ativos");
-                    updateStats();
-                };
-                reader.readAsArrayBuffer(file);
-            }
-
-            function drawNextFrame() {
-                const canvas = $("sender-canvas");
-                if (state.calibrationLeft > 0) {
-                    P.drawCalibrationFrame(canvas);
-                    state.calibrationLeft--;
-                    setStatus("Frame 0: calibração das 64 cores");
-                } else {
-                    const packet = state.encoder.packet(state.sequence);
-                    const header = P.packHeader({
-                        sessionId: state.sessionId,
-                        seq: state.sequence,
-                        k: state.k,
-                        blockLen: BLOCK_LENGTH,
-                        totalLen: state.data.length,
-                        fileCrc32: state.fileCrc32,
-                        indices: packet.indices,
-                        filename: state.file.name
-                    });
-                    P.drawDataFrame(canvas, packet.data, header, state.sequence);
-                    if ((state.sequence % 30) === 0) setStatus("Recalibração automática + dados");
-                    else setStatus("A enviar pacotes Fountain — aponta para os blocos");
-                    state.sequence++;
-                    if (state.sequence >= state.sequenceLimit) {
-                        state.sequence = 0;
-                        state.calibrationLeft = CALIBRATION_FRAMES;
-                        state.cycle++;
-                        setStatus(`A repetir Fountain Codes · ciclo ${state.cycle}`);
-                    }
-                }
-                state.frameNumber++;
-                $("screen").classList.add("sending");
-                updateStats();
-            }
-
-            function animationLoop(timestamp) {
-                if (!state.running) return;
-                const interval = 1000 / Number($("fps").value);
-                if (!state.lastDraw || timestamp - state.lastDraw >= interval) {
-                    state.lastDraw = timestamp;
-                    drawNextFrame();
-                }
-                state.animationFrame = requestAnimationFrame(animationLoop);
-            }
-
-            function start() {
-                if (!state.data || state.generating) return;
-                state.running = true;
-                state.lastDraw = 0;
-                $("start-btn").disabled = true;
-                $("pause-btn").disabled = false;
-                $("pause-btn").textContent = "Ⅱ Pausar";
-                setStatus("A iniciar stream Fountain");
-                state.animationFrame = requestAnimationFrame(animationLoop);
-            }
-
-            function pause() {
-                state.running = !state.running;
-                if (state.running) {
-                    $("pause-btn").textContent = "Ⅱ Pausar";
-                    state.lastDraw = 0;
-                    state.animationFrame = requestAnimationFrame(animationLoop);
-                    setStatus("A continuar Fountain stream");
-                } else {
-                    $("pause-btn").textContent = "▶ Continuar";
-                    cancelAnimationFrame(state.animationFrame);
-                    setStatus("Pausado");
-                }
-            }
-
-            function sleep(milliseconds) {
-                return new Promise(resolve => window.setTimeout(resolve, milliseconds));
-            }
-
-            function recordingMimeType() {
-                if (!window.MediaRecorder) return "";
-                const choices = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
-                return choices.find(type => MediaRecorder.isTypeSupported(type)) || "";
-            }
-
-            async function generateVideo() {
-                if (!state.data || state.generating) return;
-                if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
-                    setStatus("Este navegador não consegue gerar vídeo offline", true);
-                    return;
-                }
-                const mimeType = recordingMimeType();
-                if (!mimeType) {
-                    setStatus("Formato de vídeo não suportado neste navegador", true);
-                    return;
-                }
-                cancelAnimationFrame(state.animationFrame);
-                state.running = false;
-                state.generating = true;
-                state.sequence = 0;
-                state.calibrationLeft = CALIBRATION_FRAMES;
-                state.frameNumber = 0;
-                state.cycle = 0;
-                $("start-btn").disabled = true;
-                $("pause-btn").disabled = true;
-                $("video-btn").disabled = true;
-                $("reset-btn").disabled = true;
-                $("video-btn").textContent = "⏳ A gerar vídeo Fountain…";
-
-                const fps = Number($("fps").value);
-                const canvas = $("sender-canvas");
-                P.drawCalibrationFrame(canvas);
-                const stream = canvas.captureStream(fps);
-                const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
-                const chunks = [];
-                const stopped = new Promise(resolve => recorder.addEventListener("stop", resolve, { once: true }));
-                recorder.addEventListener("dataavailable", event => {
-                    if (event.data && event.data.size) chunks.push(event.data);
-                });
-
-                try {
-                    recorder.start(1000);
-                    const framesToGenerate = (CALIBRATION_FRAMES + state.sequenceLimit) * 2;
-                    for (let frame = 0; frame < framesToGenerate; frame++) {
-                        drawNextFrame();
-                        const track = stream.getVideoTracks()[0];
-                        if (track && track.requestFrame) track.requestFrame();
-                        setStatus(`A gerar vídeo Fountain · ${frame + 1} / ${framesToGenerate}`);
-                        await sleep(1000 / fps);
-                    }
-                    recorder.stop();
-                    await stopped;
-                    const extension = mimeType.includes("mp4") ? "mp4" : "webm";
-                    const blob = new Blob(chunks, { type: mimeType });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.href = url;
-                    link.download = `${state.file.name.replace(/\.[^.]*$/, "")}.fountain.${extension}`;
-                    document.body.appendChild(link);
-                    link.click();
-                    link.remove();
-                    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-                    setStatus(`Vídeo Fountain criado (${formatBytes(blob.size)})`);
-                } catch (error) {
-                    if (recorder.state !== "inactive") recorder.stop();
-                    setStatus(`Erro ao gerar vídeo: ${error.message}`, true);
-                } finally {
-                    stream.getTracks().forEach(track => track.stop());
-                    state.generating = false;
-                    $("start-btn").disabled = false;
-                    $("video-btn").disabled = false;
-                    $("reset-btn").disabled = false;
-                    $("video-btn").textContent = "🎞 Gerar vídeo offline";
-                    updateStats();
-                }
-            }
-
-            function receiverUrl() { return new URL("/receive/", window.location.href).href; }
-
-            async function copyReceiverLink() {
-                const input = $("receiver-link");
-                try {
-                    await navigator.clipboard.writeText(input.value);
-                } catch (_) {
-                    input.focus(); input.select(); document.execCommand("copy");
-                }
-                $("share-status").textContent = "Link copiado.";
-            }
-
-            async function shareReceiverLink() {
-                const url = receiverUrl();
-                if (navigator.share) {
-                    try {
-                        await navigator.share({ title: "VEF-3 Receiver", text: "Abrir para ler os blocos VEF-3", url });
-                        $("share-status").textContent = "Link partilhado.";
-                        return;
-                    } catch (_) {}
-                }
-                await copyReceiverLink();
-            }
-
-            function reset() {
-                state.running = false;
-                cancelAnimationFrame(state.animationFrame);
-                state.file = null; state.data = null; state.encoder = null;
-                state.k = 0; state.sequenceLimit = 0; state.sequence = 0;
-                state.frameNumber = 0; state.calibrationLeft = 0;
-                $("file-input").value = "";
-                $("file-card").classList.remove("visible");
-                $("start-btn").disabled = true;
-                $("video-btn").disabled = true;
-                $("pause-btn").disabled = true;
-                $("fullscreen-btn").disabled = true;
-                $("reset-btn").disabled = false;
-                $("screen").classList.remove("sending");
-                $("pause-btn").textContent = "Ⅱ Pausar";
-                setStatus("Escolhe um ficheiro para começar");
-                updateStats();
-            }
-
-            $("file-input").addEventListener("change", event => chooseFile(event.target.files[0]));
-            $("hello-btn").addEventListener("click", createHelloFile);
-            $("start-btn").addEventListener("click", start);
-            $("video-btn").addEventListener("click", generateVideo);
-            $("pause-btn").addEventListener("click", pause);
-            $("reset-btn").addEventListener("click", reset);
-            $("copy-link-btn").addEventListener("click", copyReceiverLink);
-            $("share-link-btn").addEventListener("click", shareReceiverLink);
-            $("fps").addEventListener("change", updateStats);
-            $("receiver-link").value = receiverUrl();
-            $("fullscreen-btn").addEventListener("click", async () => {
-                document.body.classList.add("fullscreen-mode");
-                if (document.documentElement.requestFullscreen) {
-                    try { await document.documentElement.requestFullscreen(); } catch (_) {}
-                }
-            });
-            document.addEventListener("fullscreenchange", () => {
-                if (!document.fullscreenElement) document.body.classList.remove("fullscreen-mode");
-            });
-
-            const dropzone = $("dropzone");
-            ["dragenter", "dragover"].forEach(type => dropzone.addEventListener(type, event => {
-                event.preventDefault(); dropzone.classList.add("dragover");
-            }));
-            ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => {
-                event.preventDefault(); dropzone.classList.remove("dragover");
-            }));
-            dropzone.addEventListener("drop", event => chooseFile(event.dataTransfer.files[0]));
-            updateStats();
-        })();
+            state.frame++; $("stage").classList.add("qr-active");
+        }
+        function loop(now) { if(!state.running)return; const interval=1000/Number($("cfg-fps").value); if(!state.last||now-state.last>=interval){state.last=now;drawNext();} state.raf=requestAnimationFrame(loop); }
+        async function startStream(reveal=false) {
+            if(!state.data)return; state.generation++; state.running=true; state.last=0; $("stage").hidden=false; $("stream-specs").hidden=false; $("footer-hint").hidden=false; updateStats(); if(reveal) $("stage").scrollIntoView({behavior:"smooth",block:"start"}); state.raf=requestAnimationFrame(loop);
+        }
+        function shareUrl(){ return new URL("/receive/",location.href).href; }
+        async function copyLink(){ const value=$("receiver-link").value; try{await navigator.clipboard.writeText(value);}catch(_){const input=$("receiver-link");input.select();document.execCommand("copy");} $("share-status").textContent="Link copiado."; }
+        async function shareLink(){ if(navigator.share){try{await navigator.share({title:"VEF-3 Receiver",url:shareUrl()});$("share-status").textContent="Link partilhado.";return;}catch(_){}} await copyLink(); }
+        $("cfg-file").addEventListener("change",e=>selectFile(e.target.files[0]));
+        $("pane-file").addEventListener("click",e=>{if($("pane-file").classList.contains("has-file")){e.preventDefault();stopStream();}});
+        document.querySelectorAll('input[name="send-mode"]').forEach(input=>input.addEventListener("change",e=>{state.mode=e.target.value; const snippet=state.mode==="snippet"; $("pane-file").hidden=snippet; $("pane-snippet").hidden=!snippet; $("tool-title").textContent=snippet?"Enviar texto":"Enviar um ficheiro"; if(state.running)stopStream(); status(snippet?"Escreve texto para começar":"Escolhe um ficheiro para começar");}));
+        $("send-snippet").addEventListener("click",selectText); $("cfg-fps").addEventListener("change",updateStats); $("cfg-bytes").addEventListener("change",()=>{if(state.file)arm(state.file.name,state.file.type,state.data);});
+        $("sender-canvas").addEventListener("click",()=>document.body.classList.toggle("qr-full")); $("receiver-link").value=shareUrl(); $("copy-link-btn").addEventListener("click",copyLink); $("share-link-btn").addEventListener("click",shareLink); $("share-close-btn").addEventListener("click",()=>$("share-dialog").close());
+        $("specs").addEventListener("click",()=>{if(state.running)$("share-dialog").showModal();});
+        updateStats();
+    })();
     </script>
 </body>
 </html>
