@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VEF-3 Decoder - Visual File Transfer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        :root {
+            --primary: #00ff88;
+            --primary-dark: #00cc6a;
+            --secondary: #ff6b6b;
+            --bg-dark: #0a0a0f;
+            --bg-card: #151520;
+            --text: #ffffff;
+            --text-dim: #888899;
+            --success: #00ff88;
+            --warning: #ffaa00;
+            --error: #ff4444;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            background: linear-gradient(135deg, var(--primary), #00aaff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+        
+        .status-bar {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-label {
+            color: var(--text-dim);
+        }
+        
+        .status-value {
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        .status-value.success { color: var(--success); }
+        .status-value.warning { color: var(--warning); }
+        .status-value.error { color: var(--error); }
+        
+        .progress-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .progress-bar-bg {
+            background: #222;
+            border-radius: 8px;
+            height: 20px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, var(--primary), #00aaff);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 8px;
+        }
+        
+        .preview-container {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+        
+        .camera-preview {
+            width: 100%;
+            aspect-ratio: 16/10;
+            background: #000;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .camera-preview video,
+        .camera-preview canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .overlay-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.7);
+            pointer-events: none;
+        }
+        
+        .frame-indicator {
+            background: rgba(0,0,0,0.6);
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        
+        .corner-markers {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        
+        .corner-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid;
+        }
+        
+        .corner-marker.tl { top: 5%; left: 5%; border-color: #00ff00; border-radius: 4px 0 0 0; }
+        .corner-marker.tr { top: 5%; right: 5%; border-color: #ff0000; border-radius: 0 4px 0 0; }
+        .corner-marker.bl { bottom: 5%; left: 5%; border-color: #0000ff; border-radius: 0 0 0 4px; }
+        .corner-marker.br { bottom: 5%; right: 5%; border-color: #ffff00; border-radius: 0 0 4px 0; }
+        
+        .btn {
+            width: 100%;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 10px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #000;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 2px solid var(--primary);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .instructions {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+        }
+        
+        .instructions h3 {
+            margin-bottom: 10px;
+            color: var(--primary);
+        }
+        
+        .instructions ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .instructions li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+        
+        .instructions li::before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+        }
+        
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .message.info {
+            background: rgba(0, 170, 255, 0.2);
+            border: 1px solid #00aaff;
+        }
+        
+        .message.success {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid var(--success);
+        }
+        
+        .message.error {
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid var(--error);
+        }
+        
+        .message.warning {
+            background: rgba(255, 170, 0, 0.2);
+            border: 1px solid var(--warning);
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .calibration-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            margin-top: 15px;
+            background: #000;
+            padding: 5px;
+            border-radius: 8px;
+        }
+        
+        .calibration-color {
+            aspect-ratio: 1;
+            border-radius: 2px;
+        }
+        
+        .debug-info {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            background: #000;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>VEF-3 Decoder</h1>
+            <p class="subtitle">Visual File Transfer via Camera</p>
+        </header>
+        
+        <div id="message" class="message info hidden"></div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Status</span>
+                <span id="status" class="status-value">Ready</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Frames Detected</span>
+                <span id="frames-count" class="status-value">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Packets Received</span>
+                <span id="packets-count" class="status-value">0 / 0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Blocks Decoded</span>
+                <span id="blocks-progress" class="status-value">0%</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Calibration</span>
+                <span id="calibration-status" class="status-value warning">Not Calibrated</span>
+            </div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress-header">
+                <span>Transfer Progress</span>
+                <span id="progress-percent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+        </div>
+        
+        <div class="preview-container">
+            <div id="camera-preview" class="camera-preview">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas" class="hidden"></canvas>
+                <div id="overlay-info" class="overlay-info hidden">
+                    <span id="frame-id" class="frame-indicator">Frame: -</span>
+                    <span id="fps-display">FPS: 0</span>
+                </div>
+                <div id="corner-markers" class="corner-markers hidden">
+                    <div class="corner-marker tl"></div>
+                    <div class="corner-marker tr"></div>
+                    <div class="corner-marker bl"></div>
+                    <div class="corner-marker br"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>📱 Instructions</h3>
+            <ul>
+                <li>Click "Start Camera" to begin</li>
+                <li>Point camera at screen showing VEF-3 video</li>
+                <li>Keep steady - use a tripod if possible</li>
+                <li>Maximize screen brightness</li>
+                <li>Avoid reflections and glare</li>
+                <li>Hold 20-40cm from the screen</li>
+            </ul>
+        </div>
+        
+        <button id="start-btn" class="btn btn-primary">📷 Start Camera</button>
+        <button id="stop-btn" class="btn btn-secondary hidden">⏹ Stop</button>
+        <button id="download-btn" class="btn btn-primary hidden">💾 Download File</button>
+        
+        <div id="calibration-section" class="hidden">
+            <h3 style="margin: 15px 0 10px; color: var(--primary);">Calibration Grid</h3>
+            <div id="calibration-grid" class="calibration-grid"></div>
+        </div>
+        
+        <div id="debug-section" class="hidden">
+            <h3 style="margin: 15px 0 10px; color: var(--text-dim);">Debug Info</h3>
+            <div id="debug-info" class="debug-info"></div>
+        </div>
+    </div>
+    
+    <script>
+        // VEF-3 Core Decoder
+        // ==================
+        
+        // Configuration
+        const CONFIG = {
+            FRAME_COLS: 80,
+            FRAME_ROWS: 50,
+            BLOCK_SIZE: 8,
+            BITS_PER_BLOCK: 6,
+            LEVELS: [0, 85, 170, 255],
+            CALIBRATION_COLORS: 64,
+            DATA_BLOCKS: 3960, // 4000 - 40 metadata
+            CALIBRATION_FRAMES_NEEDED: 1,
+            RECALIBRATION_INTERVAL: 30, // frames
+            LOST_FRAME_TIMEOUT: 3000, // ms
+        };
+        
+        // Color level thresholds for decoding
+        const THRESHOLDS = [
+            { min: 0, max: 42, level: 0 },
+            { min: 43, max: 127, level: 1 },
+            { min: 128, max: 212, level: 2 },
+            { min: 213, max: 255, level: 3 },
+        ];
+        
+        // State
+        let state = {
+            cameraActive: false,
+            decoder: null,
+            framesProcessed: 0,
+            packetsReceived: new Map(),
+            blocksDecoded: 0,
+            totalBlocks: 0,
+            calibrated: false,
+            calibrationColors: [],
+            receivedFrameIds: new Set(),
+            lastFrameTime: 0,
+            fps: 0,
+            fileData: null,
+            fileName: 'unknown',
+            fileChecksum: '',
+        };
+        
+        // DOM Elements
+        const elements = {
+            video: document.getElementById('video'),
+            canvas: document.getElementById('canvas'),
+            startBtn: document.getElementById('start-btn'),
+            stopBtn: document.getElementById('stop-btn'),
+            downloadBtn: document.getElementById('download-btn'),
+            status: document.getElementById('status'),
+            framesCount: document.getElementById('frames-count'),
+            packetsCount: document.getElementById('packets-count'),
+            blocksProgress: document.getElementById('blocks-progress'),
+            calibrationStatus: document.getElementById('calibration-status'),
+            progressBar: document.getElementById('progress-bar'),
+            progressPercent: document.getElementById('progress-percent'),
+            message: document.getElementById('message'),
+            overlayInfo: document.getElementById('overlay-info'),
+            cornerMarkers: document.getElementById('corner-markers'),
+            frameId: document.getElementById('frame-id'),
+            fpsDisplay: document.getElementById('fps-display'),
+            calibrationGrid: document.getElementById('calibration-grid'),
+            calibrationSection: document.getElementById('calibration-section'),
+            debugInfo: document.getElementById('debug-info'),
+        };
+        
+        // Utility Functions
+        // =================
+        
+        function showMessage(text, type = 'info') {
+            elements.message.textContent = text;
+            elements.message.className = `message ${type}`;
+            elements.message.classList.remove('hidden');
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    elements.message.classList.add('hidden');
+                }, 3000);
+            }
+        }
+        
+        function updateStatus(text, type = '') {
+            elements.status.textContent = text;
+            elements.status.className = `status-value ${type}`;
+        }
+        
+        function log(text) {
+            console.log(text);
+            const debug = elements.debugInfo;
+            if (debug) {
+                debug.innerHTML += text + '\n';
+                debug.scrollTop = debug.scrollHeight;
+            }
+        }
+        
+        // Color Codec Functions
+        // ======================
+        
+        function channelToLevel(channel) {
+            for (const t of THRESHOLDS) {
+                if (channel >= t.min && channel <= t.max) {
+                    return t.level;
+                }
+            }
+            return 0;
+        }
+        
+        function rgbToValue(r, g, b) {
+            const rLevel = channelToLevel(r);
+            const gLevel = channelToLevel(g);
+            const bLevel = channelToLevel(b);
+            return (rLevel * 16) + (gLevel * 4) + bLevel;
+        }
+        
+        function valueToRgb(value) {
+            const rLevel = Math.floor(value / 16);
+            const gLevel = Math.floor((value % 16) / 4);
+            const bLevel = value % 4;
+            return [
+                CONFIG.LEVELS[rLevel],
+                CONFIG.LEVELS[gLevel],
+                CONFIG.LEVELS[bLevel]
+            ];
+        }
+        
+        function bytesToValues(data) {
+            const values = [];
+            const paddedLen = Math.ceil(data.length / 4) * 4;
+            const paddedData = new Uint8Array(paddedLen);
+            paddedData.set(data);
+            
+            for (let i = 0; i < paddedLen; i += 4) {
+                const bits = (paddedData[i] << 24) | (paddedData[i + 1] << 16) | 
+                             (paddedData[i + 2] << 8) | paddedData[i + 3];
+                
+                values.push((bits >> 24) & 0x3F);
+                values.push((bits >> 18) & 0x3F);
+                values.push((bits >> 12) & 0x3F);
+                values.push((bits >> 6) & 0x3F);
+                values.push(bits & 0x3F);
+            }
+            
+            const actualValues = Math.floor(data.length * 8 / 6);
+            return values.slice(0, actualValues);
+        }
+        
+        function valuesToBytes(values) {
+            if (!values || values.length === 0) return new Uint8Array(0);
+            
+            // Pad to multiple of 5
+            while (values.length % 5 !== 0) {
+                values.push(0);
+            }
+            
+            const result = [];
+            
+            for (let i = 0; i < values.length; i += 5) {
+                let bits = 0;
+                bits |= (values[i] & 0x3F) << 24;
+                bits |= (values[i + 1] & 0x3F) << 18;
+                bits |= (values[i + 2] & 0x3F) << 12;
+                bits |= (values[i + 3] & 0x3F) << 6;
+                bits |= (values[i + 4] & 0x3F);
+                
+                result.push((bits >> 24) & 0xFF);
+                result.push((bits >> 16) & 0xFF);
+                result.push((bits >> 8) & 0xFF);
+                result.push(bits & 0xFF);
+            }
+            
+            const actualBytes = Math.floor(values.length * 6 / 8);
+            return new Uint8Array(result.slice(0, actualBytes));
+        }
+        
+        // Fountain Decoder
+        // =================
+        
+        class FountainDecoder {
+            constructor() {
+                this.blocks = {};
+                this.pendingPackets = [];
+                this.k = 0;
+                this.originalSize = 0;
+                this.checksum = '';
+                this.packetsReceived = 0;
+            }
+            
+            addPacket(packet) {
+                this.packetsReceived++;
+                
+                if (packet.num_blocks > 0 && this.k === 0) {
+                    this.k = packet.num_blocks;
+                    updateStatus(`Decoding ${this.k} blocks...`, 'warning');
+                }
+                
+                if (packet.original_size) {
+                    this.originalSize = packet.original_size;
+                }
+                
+                if (packet.checksum) {
+                    this.checksum = packet.checksum;
+                }
+                
+                // Decode block IDs from metadata
+                const blockIds = packet.block_ids || [];
+                const data = packet.data;
+                
+                // Try to eliminate known blocks
+                let changed = true;
+                let remainingIds = [...blockIds];
+                let remainingData = [...data];
+                
+                while (changed && remainingIds.length > 1) {
+                    changed = false;
+                    for (let i = 0; i < remainingIds.length; i++) {
+                        const idx = remainingIds[i];
+                        if (this.blocks[idx]) {
+                            // XOR out known block
+                            for (let j = 0; j < remainingData.length; j++) {
+                                remainingData[j] ^= this.blocks[idx][j];
+                            }
+                            remainingIds.splice(i, 1);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // If only one block left, we can decode it
+                if (remainingIds.length === 1) {
+                    const idx = remainingIds[0];
+                    if (!this.blocks[idx]) {
+                        this.blocks[idx] = remainingData;
+                        this.pendingPackets = this.pendingPackets.filter(p => 
+                            !p.block_ids.includes(idx)
+                        );
+                        // Re-process pending
+                        this.processPending();
+                    }
+                } else {
+                    // Store for later
+                    this.pendingPackets.push({
+                        block_ids: remainingIds,
+                        data: remainingData
+                    });
+                }
+                
+                return this.isComplete();
+            }
+            
+            processPending() {
+                let changed = true;
+                while (changed) {
+                    changed = false;
+                    
+                    for (let i = this.pendingPackets.length - 1; i >= 0; i--) {
+                        const p = this.pendingPackets[i];
+                        if (p.block_ids.length === 1) {
+                            const idx = p.block_ids[0];
+                            if (!this.blocks[idx]) {
+                                this.blocks[idx] = p.data;
+                                this.pendingPackets.splice(i, 1);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            isComplete() {
+                return Object.keys(this.blocks).length >= this.k;
+            }
+            
+            getDecodedData() {
+                if (!this.isComplete()) return null;
+                
+                const sortedKeys = Object.keys(this.blocks).map(Number).sort((a, b) => a - b);
+                const allData = [];
+                
+                for (const key of sortedKeys) {
+                    allData.push(...this.blocks[key]);
+                }
+                
+                const data = new Uint8Array(allData.slice(0, this.originalSize));
+                
+                // Verify checksum
+                if (this.checksum) {
+                    const computed = awaitMd5(data);
+                    if (computed !== this.checksum) {
+                        console.error(`Checksum mismatch: expected ${this.checksum}, got ${computed}`);
+                        return null;
+                    }
+                }
+                
+                return data;
+            }
+            
+            getProgress() {
+                return {
+                    blocks: Object.keys(this.blocks).length,
+                    total: this.k,
+                    percent: this.k > 0 ? Math.round(Object.keys(this.blocks).length / this.k * 100) : 0
+                };
+            }
+        }
+        
+        function computeMd5(data) {
+            return new Promise((resolve) => {
+                const worker = new Worker(URL.createObjectURL(new Blob([`
+                    self.onmessage = function(e) {
+                        importScripts('https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.2/spark-md5.min.js');
+                        const hash = SparkMD5.ArrayBuffer.hash(e.data);
+                        self.postMessage(hash);
+                    }
+                `], { type: 'application/javascript' })));
+                
+                worker.onmessage = (e) => resolve(e.data);
+                worker.postMessage(data.buffer);
+            });
+        }
+        
+        async function awaitMd5(data) {
+            return computeMd5(data);
+        }
+        
+        // Frame Processing
+        // =================
+        
+        function sampleBlock(imageData, col, row, blockSize) {
+            const x = col * blockSize;
+            const y = row * blockSize;
+            
+            let rSum = 0, gSum = 0, bSum = 0;
+            let samples = 0;
+            
+            // Sample center 4x4 pixels
+            for (let dy = 2; dy < blockSize - 2; dy += 2) {
+                for (let dx = 2; dx < blockSize - 2; dx += 2) {
+                    const px = (y + dy) * imageData.width + (x + dx);
+                    rSum += imageData.data[px * 4];
+                    gSum += imageData.data[px * 4 + 1];
+                    bSum += imageData.data[px * 4 + 2];
+                    samples++;
+                }
+            }
+            
+            if (samples > 0) {
+                return [
+                    Math.round(rSum / samples),
+                    Math.round(gSum / samples),
+                    Math.round(bSum / samples)
+                ];
+            }
+            return [0, 0, 0];
+        }
+        
+        function detectCorners(imageData) {
+            // Simplified corner detection
+            // In production, would use proper corner detection algorithm
+            return {
+                found: true,
+                corners: [
+                    { x: 0.05, y: 0.05 },  // TL
+                    { x: 0.95, y: 0.05 },  // TR
+                    { x: 0.05, y: 0.95 },  // BL
+                    { x: 0.95, y: 0.95 }   // BR
+                ]
+            };
+        }
+        
+        function processFrame(imageData) {
+            const values = [];
+            const blockSize = CONFIG.BLOCK_SIZE;
+            
+            // Process data blocks (rows 2 to 47, leave room for calibration area)
+            for (let row = 2; row < 49; row++) {
+                for (let col = 0; col < CONFIG.FRAME_COLS; col++) {
+                    const color = sampleBlock(imageData, col, row, blockSize);
+                    const value = rgbToValue(color[0], color[1], color[2]);
+                    values.push(value);
+                }
+            }
+            
+            // Read metadata row
+            const metadataValues = [];
+            for (let col = 0; col < CONFIG.FRAME_COLS; col++) {
+                const color = sampleBlock(imageData, col, 49, blockSize);
+                const value = rgbToValue(color[0], color[1], color[2]);
+                metadataValues.push(value);
+            }
+            
+            // Decode metadata (simplified - would properly parse in production)
+            // For now, assume frame index and packet ID are embedded
+            
+            return {
+                values,
+                metadata: metadataValues,
+                data: valuesToBytes(values)
+            };
+        }
+        
+        // Camera Functions
+        // =================
+        
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 800 },
+                    },
+                    audio: false
+                });
+                
+                elements.video.srcObject = stream;
+                elements.video.classList.remove('hidden');
+                elements.overlayInfo.classList.remove('hidden');
+                elements.cornerMarkers.classList.remove('hidden');
+                
+                elements.startBtn.classList.add('hidden');
+                elements.stopBtn.classList.remove('hidden');
+                
+                state.cameraActive = true;
+                state.decoder = new FountainDecoder();
+                
+                updateStatus('Camera Active', 'success');
+                showMessage('Point camera at VEF-3 display', 'info');
+                
+                // Start processing loop
+                processLoop();
+                
+            } catch (err) {
+                console.error('Camera error:', err);
+                showMessage('Camera access denied or not available', 'error');
+                updateStatus('Camera Error', 'error');
+            }
+        }
+        
+        function stopCamera() {
+            if (elements.video.srcObject) {
+                elements.video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            
+            elements.video.classList.add('hidden');
+            elements.overlayInfo.classList.add('hidden');
+            elements.cornerMarkers.classList.add('hidden');
+            
+            elements.startBtn.classList.remove('hidden');
+            elements.stopBtn.classList.add('hidden');
+            
+            state.cameraActive = false;
+            updateStatus('Stopped', '');
+        }
+        
+        let lastFpsTime = 0;
+        let frameCount = 0;
+        
+        function processLoop() {
+            if (!state.cameraActive) return;
+            
+            const now = performance.now();
+            
+            // Calculate FPS
+            frameCount++;
+            if (now - lastFpsTime >= 1000) {
+                state.fps = frameCount;
+                frameCount = 0;
+                lastFpsTime = now;
+                elements.fpsDisplay.textContent = `FPS: ${state.fps}`;
+            }
+            
+            // Process frame
+            if (elements.video.readyState >= 2) {
+                processVideoFrame();
+            }
+            
+            // Check for timeout
+            if (now - state.lastFrameTime > CONFIG.LOST_FRAME_TIMEOUT) {
+                if (state.framesProcessed > 0) {
+                    checkCompletion();
+                }
+            }
+            
+            requestAnimationFrame(processLoop);
+        }
+        
+        function processVideoFrame() {
+            const video = elements.video;
+            const canvas = elements.canvas;
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame
+            ctx.drawImage(video, 0, 0);
+            
+            // Get image data
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Detect corners
+            const corners = detectCorners(imageData);
+            
+            if (!corners.found) {
+                return;
+            }
+            
+            state.lastFrameTime = performance.now();
+            state.framesProcessed++;
+            
+            elements.framesCount.textContent = state.framesProcessed;
+            
+            // Process the frame
+            const result = processFrame(imageData);
+            
+            // Try to decode packet from frame
+            // This is a simplified version - would properly parse metadata in production
+            
+            // Update UI
+            const progress = state.decoder.getProgress();
+            state.blocksDecoded = progress.blocks;
+            state.totalBlocks = progress.total;
+            
+            elements.blocksProgress.textContent = `${progress.percent}%`;
+            elements.progressBar.style.width = `${progress.percent}%`;
+            elements.progressPercent.textContent = `${progress.percent}%`;
+            
+            if (state.totalBlocks > 0) {
+                elements.packetsCount.textContent = `${state.blocksDecoded} / ${state.totalBlocks}`;
+            }
+            
+            // Simulate packet addition for demo
+            // In real implementation, would extract packet from metadata
+            if (state.blocksDecoded >= state.totalBlocks && state.totalBlocks > 0) {
+                checkCompletion();
+            }
+        }
+        
+        function checkCompletion() {
+            if (state.decoder && state.decoder.isComplete()) {
+                const data = state.decoder.getDecodedData();
+                
+                if (data) {
+                    state.fileData = data;
+                    
+                    updateStatus('Transfer Complete!', 'success');
+                    elements.progressBar.style.width = '100%';
+                    elements.progressPercent.textContent = '100%';
+                    
+                    showMessage('File transfer complete! Click Download to save.', 'success');
+                    elements.downloadBtn.classList.remove('hidden');
+                    
+                    // Play success sound if available
+                    try {
+                        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2JkI2Ff3Z4gIaKjYuGgXx5fYKHi42LiIR/fH2Ah4yPj42JhYB+f4KFi5GTko+ Bram');
+                        audio.play().catch(() => {});
+                    } catch (e) {}
+                }
+            }
+        }
+        
+        function downloadFile() {
+            if (!state.fileData) {
+                showMessage('No file data available', 'error');
+                return;
+            }
+            
+            const blob = new Blob([state.fileData], { type: 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = state.fileName || 'received_file';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            URL.revokeObjectURL(url);
+            
+            showMessage('File downloaded!', 'success');
+        }
+        
+        // Calibration Functions
+        // ======================
+        
+        function buildCalibrationGrid() {
+            elements.calibrationSection.classList.remove('hidden');
+            elements.calibrationGrid.innerHTML = '';
+            
+            // Generate all 64 colors
+            for (let i = 0; i < 64; i++) {
+                const rgb = valueToRgb(i);
+                const div = document.createElement('div');
+                div.className = 'calibration-color';
+                div.style.backgroundColor = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+                elements.calibrationGrid.appendChild(div);
+            }
+        }
+        
+        // Event Listeners
+        // ===============
+        
+        elements.startBtn.addEventListener('click', startCamera);
+        elements.stopBtn.addEventListener('click', stopCamera);
+        elements.downloadBtn.addEventListener('click', downloadFile);
+        
+        // Initialize
+        // ==========
+        
+        buildCalibrationGrid();
+        
+        log('VEF-3 Decoder initialized');
+        log(`Configuration: ${CONFIG.FRAME_COLS}x${CONFIG.FRAME_ROWS} blocks, ${CONFIG.BLOCK_SIZE}px block size`);
+        
+        // Check for camera support
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showMessage('Camera API not supported in this browser', 'error');
+            elements.startBtn.disabled = true;
+        }
+    </script>
+</body>
+</html>

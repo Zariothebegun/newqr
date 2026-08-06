@@ -1,0 +1,3 @@
+# VEF-3 CORE Requirements
+pillow>=10.0.0
+numpy>=1.24.0
