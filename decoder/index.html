@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>VEF-3 Optical Transfer — receber</title>
+    <link rel="stylesheet" href="/static/decimen-style.css?v=tiles-2">
+</head>
+<body class="receiver-page">
+    <header class="site-header">
+        <a class="brand" href="/">VEF-3 Optical Transfer</a>
+        <nav class="mode-nav" aria-label="Modo"><a href="/send/">Enviar</a><a href="/receive/" aria-current="page">Receber</a></nav>
+    </header>
+
+    <main class="receiver-shell">
+        <section class="receiver-primary">
+            <div class="receiver-heading">
+                <p class="eyebrow">Câmara → dispositivo</p>
+                <h1>Receber</h1>
+                <div class="hint status-line" id="status">Pronto para ler um stream</div>
+            </div>
+            <div id="message" class="hint" hidden></div>
+            <button id="start-btn" type="button">Iniciar câmara</button>
+            <button id="stop-btn" class="secondary-button" type="button" hidden>Parar</button>
+            <div class="preview-zone" id="preview" hidden>
+                <div class="preview">
+                    <video id="video" muted playsinline></video>
+                    <canvas id="canvas" hidden></canvas>
+                    <div class="transfer-hud">
+                        <div class="progress-status" id="progress-status" aria-live="polite">
+                            <strong id="progress-label">0% · 0 frames</strong><span id="eta-label">A procurar…</span>
+                        </div>
+                        <div class="progress" id="progress" role="progressbar" aria-label="Progresso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar"></div></div>
+                    </div>
+                </div>
+            </div>
+            <div id="result"></div>
+            <details class="settings diagnostics" id="diagnostics" hidden>
+                <summary>Diagnóstico ao vivo</summary>
+                <div class="metrics" id="metrics">
+                    <div class="metric"><div class="k">captura</div><div class="v" id="frames-count">0</div></div>
+                    <div class="metric"><div class="k">fps</div><div class="v" id="fps">—</div></div>
+                    <div class="metric"><div class="k">frames novos</div><div class="v" id="packets-count">0 / 0</div></div>
+                    <div class="metric"><div class="k">tiles</div><div class="v" id="calibration">—</div></div>
+                </div>
+            </details>
+            <details class="settings">
+                <summary>Definições do receiver</summary>
+                <div class="row">
+                    <label>largura da captura<select id="cfg-width"><option>960</option><option selected>1280</option><option>1920</option></select></label>
+                    <label>fps da câmara<select id="cfg-capfps"><option selected>30</option><option>60</option></select></label>
+                    <label>modo de tiles<select id="cfg-mode"><option selected>Equilibrado</option><option>Seguro</option></select></label>
+                </div>
+                <p class="hint settings-actual" id="camera-actual">Aplicado quando a câmara iniciar.</p>
+            </details>
+            <button id="download-btn" hidden>Descarregar ficheiro</button>
+            <button id="retry-btn" class="secondary-button" hidden>Receber outro</button>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span class="footer-id"><span>VEF-3 Optical Transfer</span><span>tiles calibrados · Fountain Codes · sem rede</span></span>
+        <nav class="footer-links"><a href="/">Início</a><a href="/send/">Sender</a></nav>
+    </footer>
+
+    <script src="/static/fountain.js?v=jab-1"></script>
+    <script src="/static/jab-transfer.js?v=jab-1"></script>
+    <script src="/static/receiver.js?v=jab-1"></script>
+</body>
+</html>
