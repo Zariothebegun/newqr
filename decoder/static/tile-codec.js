@@ -1,50 +1,26 @@
-/*
- * VEF tile codec.
- *
- * A tile is not a flat colour square. It contains a 4x4 high-contrast symbol
- * (four bits) painted with one of four calibrated colours (two bits): 64
- * values per 8x8 tile. The symbol gives the camera something structural to
- * recognise even when exposure changes; the colour carries the extra bits.
- */
+/* VEF tile codec: a readable 2x2 symbol plus a calibrated colour strip. */
 (function (root) {
     "use strict";
-
     const TILE_SIZE = 8;
-    const MICRO_SIZE = 2;
-    const MICRO_COUNT = 16;
     const COLORS = [
         [255, 255, 255], // white
         [255, 72, 72],   // red
         [72, 255, 112],  // green
         [72, 144, 255]   // blue
     ];
-
-    function popcount(value) {
-        let count = 0;
-        while (value) { value &= value - 1; count++; }
-        return count;
-    }
-
-    function bitDistance(a, b) { return popcount((a ^ b) & 0xffff); }
-
-    // Select balanced 4x4 patterns with a useful minimum Hamming distance.
-    // Every symbol has eight active cells, so the colour sample has the same
-    // weight regardless of which symbol was chosen.
-    function makePatterns() {
-        const patterns = [];
-        for (let candidate = 0; candidate <= 0xffff && patterns.length < 16; candidate++) {
-            if (popcount(candidate) !== 8) continue;
-            if (patterns.every(existing => bitDistance(existing, candidate) >= 6)) patterns.push(candidate);
-        }
-        return patterns;
-    }
-
-    const PATTERNS = makePatterns();
+    // Four large quadrants carry four symbol bits. Unlike pseudo-random noise,
+    // this remains visibly structured when the full frame is on a screen.
+    const PATTERNS = Array.from({ length: 16 }, (_, value) => value);
     const PATTERN_INDEX = new Map(PATTERNS.map((pattern, index) => [pattern, index]));
+    const tileCache = new Array(64);
 
     function colour(value) { return COLORS[value & 3]; }
-
-    const tileCache = new Array(64);
+    function fillRect(buffer, stride, x, y, width, height, rgb) {
+        for (let row = y; row < y + height; row++) for (let col = x; col < x + width; col++) {
+            const offset = (row * stride + col) * 4;
+            buffer[offset] = rgb[0]; buffer[offset + 1] = rgb[1]; buffer[offset + 2] = rgb[2]; buffer[offset + 3] = 255;
+        }
+    }
 
     function cachedTile(value) {
         const key = value & 63;
@@ -52,17 +28,9 @@
         const pixels = new Uint8ClampedArray(TILE_SIZE * TILE_SIZE * 4);
         const pattern = PATTERNS[(key >>> 2) & 15];
         const rgb = colour(key);
-        for (let cell = 0; cell < MICRO_COUNT; cell++) {
-            const on = (pattern >>> cell) & 1;
-            for (let dy = 0; dy < MICRO_SIZE; dy++) for (let dx = 0; dx < MICRO_SIZE; dx++) {
-                const x = (cell % 4) * MICRO_SIZE + dx;
-                const y = Math.floor(cell / 4) * MICRO_SIZE + dy;
-                const offset = (y * TILE_SIZE + x) * 4;
-                pixels[offset] = on ? rgb[0] : 0;
-                pixels[offset + 1] = on ? rgb[1] : 0;
-                pixels[offset + 2] = on ? rgb[2] : 0;
-                pixels[offset + 3] = 255;
-            }
+        fillRect(pixels, TILE_SIZE, 0, 0, 2, TILE_SIZE, rgb);
+        for (let quadrant = 0; quadrant < 4; quadrant++) if ((pattern >>> quadrant) & 1) {
+            fillRect(pixels, TILE_SIZE, 2 + (quadrant % 2) * 3, (quadrant > 1 ? 4 : 0), 3, 4, [255, 255, 255]);
         }
         tileCache[key] = pixels;
         return pixels;
@@ -70,121 +38,50 @@
 
     function paintTile(buffer, stride, x, y, value) {
         const tile = cachedTile(value);
-        for (let row = 0; row < TILE_SIZE; row++) {
-            const source = tile.subarray(row * TILE_SIZE * 4, (row + 1) * TILE_SIZE * 4);
-            buffer.set(source, ((y + row) * stride + x) * 4);
-        }
+        for (let row = 0; row < TILE_SIZE; row++) buffer.set(tile.subarray(row * TILE_SIZE * 4, (row + 1) * TILE_SIZE * 4), ((y + row) * stride + x) * 4);
     }
 
     function drawTile(ctx, x, y, value, tileSize = TILE_SIZE) {
         if (tileSize === TILE_SIZE && ctx.canvas && ctx.canvas.width >= x + TILE_SIZE) {
-            const image = new ImageData(cachedTile(value), TILE_SIZE, TILE_SIZE);
-            ctx.putImageData(image, x, y);
+            ctx.putImageData(new ImageData(cachedTile(value), TILE_SIZE, TILE_SIZE), x, y);
             return;
         }
-        const pattern = PATTERNS[(value >>> 2) & 15];
-        const rgb = colour(value);
-        const micro = tileSize / 4;
-        for (let cell = 0; cell < MICRO_COUNT; cell++) {
-            const on = (pattern >>> cell) & 1;
-            ctx.fillStyle = on ? `rgb(${rgb[0]},${rgb[1]},${rgb[2]})` : "rgb(0,0,0)";
-            ctx.fillRect(x + (cell % 4) * micro, y + Math.floor(cell / 4) * micro, micro, micro);
+        const pattern = PATTERNS[(value >>> 2) & 15], rgb = colour(value), scale = tileSize / TILE_SIZE;
+        ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; ctx.fillRect(x, y, 2 * scale, tileSize);
+        for (let quadrant = 0; quadrant < 4; quadrant++) if ((pattern >>> quadrant) & 1) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(x + (2 + (quadrant % 2) * 3) * scale, y + (quadrant > 1 ? 4 : 0) * scale, 3 * scale, 4 * scale);
         }
     }
 
-    function luminance(rgb) { return rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114; }
-
+    function luminance(rgb) { return rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114; }
     function extract(samples) {
-        const brightness = samples.map(luminance);
-        let low = Math.min(...brightness);
-        let high = Math.max(...brightness);
-        // Keep the decision stable when a camera lifts black slightly.
-        const threshold = low + (high - low) * 0.48;
-        let mask = 0;
-        const active = [];
-        for (let cell = 0; cell < MICRO_COUNT; cell++) {
-            if (brightness[cell] > threshold) { mask |= 1 << cell; active.push(cell); }
-        }
-        let bestPattern = 0;
-        let bestDistance = Infinity;
-        for (let index = 0; index < PATTERNS.length; index++) {
-            const distance = bitDistance(mask, PATTERNS[index]);
-            if (distance < bestDistance) { bestDistance = distance; bestPattern = index; }
-        }
-        const source = active.length ? active : [...Array(MICRO_COUNT).keys()];
-        const measured = [0, 0, 0];
-        for (const cell of source) {
-            measured[0] += samples[cell][0];
-            measured[1] += samples[cell][1];
-            measured[2] += samples[cell][2];
-        }
-        return {
-            pattern: bestPattern,
-            patternDistance: bestDistance,
-            colour: measured.map(value => value / source.length),
-            contrast: high - low
-        };
+        const brightness = samples.pattern.map(luminance);
+        const low = Math.min(...brightness), high = Math.max(...brightness);
+        const threshold = low + (high - low) * .48;
+        let pattern = high - low < 1 && high > 128 ? 15 : 0;
+        brightness.forEach((value, index) => { if (high - low >= 1 && value > threshold) pattern |= 1 << index; });
+        return { pattern, patternDistance: 0, colour: samples.colour, contrast: high - low };
     }
 
     class ColourCalibrator {
-        constructor() {
-            this.samples = [[], [], [], []];
-            this.centres = COLORS.map(rgb => rgb.slice());
-            this.ready = false;
-        }
-
-        add(measured, colourIndex) {
-            if (colourIndex >= 0 && colourIndex < 4) this.samples[colourIndex].push(measured);
-        }
-
+        constructor() { this.samples = [[], [], [], []]; this.centres = COLORS.map(rgb => rgb.slice()); this.ready = false; }
+        add(measured, index) { if (index >= 0 && index < 4) this.samples[index].push(measured); }
         finish() {
-            for (let index = 0; index < 4; index++) {
-                if (!this.samples[index].length) continue;
-                this.centres[index] = [0, 1, 2].map(channel =>
-                    this.samples[index].reduce((sum, sample) => sum + sample[channel], 0) / this.samples[index].length
-                );
-            }
+            for (let index = 0; index < 4; index++) if (this.samples[index].length) this.centres[index] = [0, 1, 2].map(channel => this.samples[index].reduce((sum, sample) => sum + sample[channel], 0) / this.samples[index].length);
             this.ready = true;
         }
-
         classify(measured) {
-            let best = 0;
-            let distance = Infinity;
-            for (let index = 0; index < 4; index++) {
-                const candidate = this.centres[index];
-                const next = Math.hypot(measured[0] - candidate[0], measured[1] - candidate[1], measured[2] - candidate[2]);
-                if (next < distance) { distance = next; best = index; }
-            }
+            let best = 0, distance = Infinity;
+            for (let index = 0; index < 4; index++) { const c=this.centres[index], next=Math.hypot(measured[0]-c[0],measured[1]-c[1],measured[2]-c[2]); if(next<distance){best=index;distance=next;} }
             return { index: best, distance };
         }
     }
 
     function decodeSamples(samples, calibrator = new ColourCalibrator()) {
-        const shape = extract(samples);
-        const colour = calibrator.classify(shape.colour);
-        return {
-            value: (shape.pattern << 2) | colour.index,
-            pattern: shape.pattern,
-            colour: colour.index,
-            patternDistance: shape.patternDistance,
-            colourDistance: colour.distance,
-            contrast: shape.contrast,
-            valid: shape.patternDistance <= 4 && shape.contrast >= 18
-        };
+        const shape = extract(samples), colour = calibrator.classify(shape.colour);
+        return { value: (shape.pattern << 2) | colour.index, pattern: shape.pattern, colour: colour.index, patternDistance: 0, colourDistance: colour.distance, contrast: shape.contrast, valid: shape.contrast >= 18 || shape.pattern === 0 || shape.pattern === 15 };
     }
 
-    root.VEFTiles = {
-        TILE_SIZE,
-        MICRO_SIZE,
-        MICRO_COUNT,
-        COLORS,
-        PATTERNS,
-        PATTERN_INDEX,
-        drawTile,
-        paintTile,
-        cachedTile,
-        extract,
-        decodeSamples,
-        ColourCalibrator
-    };
+    root.VEFTiles = { TILE_SIZE, COLORS, PATTERNS, PATTERN_INDEX, drawTile, paintTile, cachedTile, extract, decodeSamples, ColourCalibrator };
 })(window);

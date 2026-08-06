@@ -8,19 +8,16 @@ class TileCodecTests(unittest.TestCase):
     def samples_for(value):
         pattern = PATTERNS[(value >> 2) & 15]
         colour = COLORS[value & 3]
-        return [
-            colour if (pattern >> cell) & 1 else (0, 0, 0)
-            for cell in range(16)
-        ]
+        return {
+            "colour": colour,
+            "pattern": [
+                (255, 255, 255) if (pattern >> quadrant) & 1 else (0, 0, 0)
+                for quadrant in range(4)
+            ],
+        }
 
-    def test_codebook_has_six_bits_and_distance(self):
-        self.assertEqual(len(PATTERNS), 16)
-        distances = [
-            (PATTERNS[left] ^ PATTERNS[right]).bit_count()
-            for left in range(len(PATTERNS))
-            for right in range(left)
-        ]
-        self.assertGreaterEqual(min(distances), 6)
+    def test_codebook_has_sixteen_readable_symbols(self):
+        self.assertEqual(PATTERNS, tuple(range(16)))
 
     def test_all_values_round_trip(self):
         calibrator = ColourCalibrator()

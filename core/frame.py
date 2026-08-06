@@ -137,13 +137,18 @@ class FrameDecoder:
         self.calibrated = False
         self.calibrator = ColourCalibrator()
 
-    def _sample_tile(self, image: Image.Image, col: int, row: int, block_size: int = BLOCK_SIZE) -> list[Tuple[int, int, int]]:
-        samples = []
-        for cell in range(16):
-            x = GRID_OFFSET_X + col * BLOCK_SIZE + (cell % 4) * 2 + 1
-            y = GRID_OFFSET_Y + row * BLOCK_SIZE + (cell // 4) * 2 + 1
-            samples.append(image.getpixel((x, y))[:3])
-        return samples
+    def _sample_tile(self, image: Image.Image, col: int, row: int, block_size: int = BLOCK_SIZE) -> dict:
+        x = GRID_OFFSET_X + col * BLOCK_SIZE
+        y = GRID_OFFSET_Y + row * BLOCK_SIZE
+        return {
+            "colour": image.getpixel((x + 1, y + BLOCK_SIZE // 2))[:3],
+            "pattern": [
+                image.getpixel((x + 3, y + 2))[:3],
+                image.getpixel((x + 6, y + 2))[:3],
+                image.getpixel((x + 3, y + 6))[:3],
+                image.getpixel((x + 6, y + 6))[:3],
+            ],
+        }
 
     def calibrate(self, calibration_img: Image.Image, block_size: int = BLOCK_SIZE) -> None:
         self.calibrator = ColourCalibrator()

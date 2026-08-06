@@ -116,9 +116,11 @@
     }
 
     function tileSamples(data,geometry,col,row) {
-        const samples=[];
-        for(let cell=0;cell<16;cell++) samples.push(samplePoint(data,geometry,P.GRID_OFFSET_X+col*8+(cell%4+.5)*2,P.GRID_OFFSET_Y+row*8+(Math.floor(cell/4)+.5)*2,1));
-        return samples;
+        const x=P.GRID_OFFSET_X+col*P.BLOCK_SIZE, y=P.GRID_OFFSET_Y+row*P.BLOCK_SIZE;
+        return {
+            colour: samplePoint(data,geometry,x+1,y+P.BLOCK_SIZE/2,1),
+            pattern: [samplePoint(data,geometry,x+3.5,y+2,1),samplePoint(data,geometry,x+6.5,y+2,1),samplePoint(data,geometry,x+3.5,y+6,1),samplePoint(data,geometry,x+6.5,y+6,1)]
+        };
     }
 
     function readHeader(data,geometry) {

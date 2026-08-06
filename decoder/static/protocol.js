@@ -185,6 +185,11 @@
         const ctx = prepareCanvas(canvas);
         const image = ctx.createImageData(FRAME_WIDTH, FRAME_HEIGHT);
         image.data.fill(0);
+        // An ImageData buffer starts transparent when filled with zeroes. If
+        // alpha stays 0, the page controls underneath show through the frame
+        // and the result looks like a broken overlay. The optical frame must
+        // be an opaque black canvas outside the tile grid.
+        for (let alpha = 3; alpha < image.data.length; alpha += 4) image.data[alpha] = 255;
         for (let row = 0; row < FRAME_ROWS; row++) for (let col = 0; col < FRAME_COLS; col++) {
             root.VEFTiles.paintTile(image.data, FRAME_WIDTH, GRID_OFFSET_X + col * BLOCK_SIZE, GRID_OFFSET_Y + row * BLOCK_SIZE, cells[row * FRAME_COLS + col]);
         }
