@@ -42,7 +42,18 @@ class FountainEncoder:
                 'original_size': len(self.data)
             }
 
-        # After K packets, use random degrees
+        # After K packets, use random degrees. A one-block file has no
+        # degree-2 equation, so repeat its only block instead.
+        if self.k <= 1:
+            return {
+                'id': packet_id,
+                'block_indices': [0],
+                'data': self.blocks[0],
+                'num_blocks': self.k,
+                'checksum': '',
+                'original_size': len(self.data)
+            }
+
         degree = self._random.randint(2, min(5, self.k))
         indices = self._random.sample(range(self.k), degree)
 

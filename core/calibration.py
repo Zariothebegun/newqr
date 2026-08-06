@@ -4,9 +4,10 @@ Robust calibration for mobile devices with automatic correction.
 """
 
 import numpy as np
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, Set
 from collections import defaultdict
 import hashlib
+import zlib
 
 
 class ColorCalibrator:

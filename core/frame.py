@@ -4,19 +4,25 @@ Renders and parses visual frames containing encoded data.
 """
 
 import numpy as np
-from typing import List, Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict
 from PIL import Image, ImageDraw
-from .color_codec import ColorCodec, FRAME_COLS, FRAME_ROWS, BLOCKS_PER_FRAME, METADATA_BLOCKS, LEVELS
+from .color_codec import ColorCodec, FRAME_COLS, FRAME_ROWS
+from .protocol import (
+    DATA_VALUES,
+    METADATA_VALUES,
+    PAYLOAD_BYTES,
+    HEADER_BYTES,
+    bytes_to_values as protocol_bytes_to_values,
+    values_to_bytes as protocol_values_to_bytes,
+    pack_header,
+    unpack_header,
+)
 
 
 # Frame dimensions (in pixels)
 BLOCK_SIZE = 8  # Each color block is 8x8 pixels
 FRAME_WIDTH = FRAME_COLS * BLOCK_SIZE  # 640 pixels
 FRAME_HEIGHT = FRAME_ROWS * BLOCK_SIZE  # 400 pixels
-
-# Corner marker configuration
-MARKER_SIZE = 30  # Size of L-shaped markers
-MARKER_OFFSET = 20  # Distance from corners
 
 # Colors for corner markers (fixed, used for alignment)
 CORNER_COLORS = {
@@ -26,8 +32,6 @@ CORNER_COLORS = {
     'BR': (255, 255, 0),    # Yellow - Bottom Right
 }
 
-# Timing line color
-TIMING_COLOR = (128, 128, 128)
 
 
 class FrameEncoder:
@@ -41,90 +45,31 @@ class FrameEncoder:
         self.frame_height = FRAME_ROWS * block_size_pixels
 
     def _draw_corner_markers(self, img: Image.Image, draw: ImageDraw.Draw):
-        """Draw L-shaped corner markers for alignment."""
-        s = MARKER_SIZE
-        offset = MARKER_OFFSET
+        """Draw alignment markers outside the payload rows.
 
-        # Top Left (green)
-        draw.rectangle([offset, offset, offset + s, offset + 5], fill=CORNER_COLORS['TL'])
-        draw.rectangle([offset, offset, offset + 5, offset + s], fill=CORNER_COLORS['TL'])
+        Earlier frames placed large L-shaped markers over data blocks.  The
+        receiver consequently read marker pixels as file data.  The four
+        8x8 markers below occupy only rows 0, 1 and 48, all of which are
+        reserved by the wire protocol.
+        """
+        size = self.block_size
+        bottom = self.frame_height - (2 * size)
+        right = self.frame_width - size
 
-        # Top Right (red)
-        x = self.frame_width - offset - s
-        draw.rectangle([x, offset, x + s, offset + 5], fill=CORNER_COLORS['TR'])
-        draw.rectangle([x + s - 5, offset, x + s, offset + s], fill=CORNER_COLORS['TR'])
-
-        # Bottom Left (blue)
-        y = self.frame_height - offset - s
-        draw.rectangle([offset, y, offset + 5, y + s], fill=CORNER_COLORS['BL'])
-        draw.rectangle([offset, y + s - 5, offset + s, y + s], fill=CORNER_COLORS['BL'])
-
-        # Bottom Right (yellow)
-        draw.rectangle([x, y, x + s - 5, y + s], fill=CORNER_COLORS['BR'])
-        draw.rectangle([x, y, x + s, y + s - 5], fill=CORNER_COLORS['BR'])
+        draw.rectangle([0, 0, size - 1, size - 1], fill=CORNER_COLORS['TL'])
+        draw.rectangle([right, 0, self.frame_width - 1, size - 1], fill=CORNER_COLORS['TR'])
+        draw.rectangle([0, bottom, size - 1, bottom + size - 1], fill=CORNER_COLORS['BL'])
+        draw.rectangle([right, bottom, self.frame_width - 1, bottom + size - 1], fill=CORNER_COLORS['BR'])
 
     def _draw_timing_lines(self, img: Image.Image, draw: ImageDraw.Draw):
-        """Draw timing lines along the borders."""
-        # Horizontal lines
-        y1 = offset = MARKER_OFFSET
-        y2 = self.frame_height - MARKER_OFFSET
-
-        for x in range(offset + MARKER_SIZE, self.frame_width - MARKER_OFFSET, 10):
-            draw.rectangle([x, y1, x + 2, y1 + 2], fill=TIMING_COLOR)
-            draw.rectangle([x, y2 - 2, x + 2, y2], fill=TIMING_COLOR)
-
-        # Vertical lines
-        x1 = offset = MARKER_OFFSET
-        x2 = self.frame_width - MARKER_OFFSET
-
-        for y in range(offset + MARKER_SIZE, self.frame_height - MARKER_OFFSET, 10):
-            draw.rectangle([x1, y, x1 + 2, y + 2], fill=TIMING_COLOR)
-            draw.rectangle([x2 - 2, y, x2, y + 2], fill=TIMING_COLOR)
+        """Keep reserved border rows black for deterministic sampling."""
+        return
 
     def _draw_color_block(self, draw: ImageDraw.Draw, col: int, row: int, color: Tuple[int, int, int]):
         """Draw a single color block at the specified grid position."""
         x = col * self.block_size
         y = row * self.block_size
         draw.rectangle([x, y, x + self.block_size - 1, y + self.block_size - 1], fill=color)
-
-    def _pack_metadata(self, frame_index: int, packet_id: int, checksum: str, num_blocks: int) -> List[int]:
-        """
-        Pack metadata into 40 6-bit values.
-
-        Metadata structure:
-        - Bytes 0-3: Frame index (uint32)
-        - Bytes 4-7: Packet ID (uint32)
-        - Bytes 8-23: Checksum (16 chars, padded)
-        - Bytes 24-27: Number of source blocks
-        - Bytes 28-31: Original file size
-        - Bytes 32-39: Reserved/padding
-
-        Total: 40 bytes -> 40 * 6 bits = 240 bits = 40 values
-        """
-        values = []
-
-        # Frame index (4 bytes = 5 values with padding)
-        idx_bytes = frame_index.to_bytes(4, 'big')
-        values.extend(ColorCodec.bytes_to_values(idx_bytes))
-
-        # Packet ID (4 bytes)
-        pkt_bytes = packet_id.to_bytes(4, 'big')
-        values.extend(ColorCodec.bytes_to_values(pkt_bytes))
-
-        # Checksum (16 bytes, but 5 values per 4 bytes = 20 values needed)
-        chk_bytes = checksum.encode().ljust(16, b'\x00')[:16]
-        values.extend(ColorCodec.bytes_to_values(chk_bytes))
-
-        # Number of blocks (4 bytes)
-        blk_bytes = num_blocks.to_bytes(4, 'big')
-        values.extend(ColorCodec.bytes_to_values(blk_bytes))
-
-        # Reserved/alignment padding to reach 40 values
-        # We need exactly 40 metadata values
-        while len(values) < METADATA_BLOCKS:
-            values.append(0)
-
-        return values[:METADATA_BLOCKS]
 
     def render_calibration_frame(self) -> Image.Image:
         """
@@ -156,6 +101,21 @@ class FrameEncoder:
 
             self._draw_color_block(draw, grid_x, grid_y, color)
 
+        metadata = protocol_bytes_to_values(
+            pack_header(
+                file_id=0,
+                packet_index=0,
+                total_packets=0,
+                original_size=0,
+                payload_length=0,
+                file_crc32=0,
+                calibration=True,
+            ),
+            METADATA_VALUES,
+        )
+        for i, value in enumerate(metadata):
+            self._draw_color_block(draw, i, FRAME_ROWS - 1, ColorCodec.value_to_rgb(value))
+
         return img
 
     def render_data_frame(self, packet: dict, frame_index: int) -> Image.Image:
@@ -178,40 +138,38 @@ class FrameEncoder:
         # Draw timing lines
         self._draw_timing_lines(img, draw)
 
-        # Convert packet data to 6-bit values
-        data = packet['data']
-        values = ColorCodec.bytes_to_values(data)
+        # The browser sender and receiver use a raw bit-packed payload.  Keep
+        # the command-line encoder on the same wire format so either sender
+        # can be read by the camera page.
+        data = bytes(packet.get('data', b''))[:PAYLOAD_BYTES]
+        block_indices = packet.get('block_indices') or [packet.get('id', frame_index)]
+        packet_index = packet.get('packet_index', block_indices[0])
+        total_packets = packet.get('total_packets', packet.get('num_blocks', 1))
+        original_size = packet.get('original_size', len(data))
+        file_id = packet.get('file_id', 0)
+        file_crc32 = packet.get('file_crc32', 0)
+        filename = packet.get('filename', '')
 
-        # Pad values to fill DATA_BLOCKS_PER_FRAME blocks
-        while len(values) < BLOCKS_PER_FRAME - METADATA_BLOCKS:
-            values.append(0)
-
-        # Draw data blocks
-        data_start_row = 2  # Start after timing area
-        for i, value in enumerate(values[:BLOCKS_PER_FRAME - METADATA_BLOCKS]):
-            # Calculate position
-            block_idx = i
-            col = block_idx % FRAME_COLS
-            row = data_start_row + (block_idx // FRAME_COLS)
-
-            if row < FRAME_ROWS - 2:  # Leave room for metadata
-                color = ColorCodec.value_to_rgb(value)
-                self._draw_color_block(draw, col, row, color)
-
-        # Draw metadata strip at bottom
-        metadata = self._pack_metadata(
-            frame_index,
-            packet['id'],
-            packet.get('checksum', ''),
-            packet['num_blocks']
-        )
-
-        for i, value in enumerate(metadata):
+        values = protocol_bytes_to_values(data, DATA_VALUES)
+        data_start_row = 2
+        for i, value in enumerate(values):
             col = i % FRAME_COLS
-            row = FRAME_ROWS - 1  # Bottom row
-
+            row = data_start_row + (i // FRAME_COLS)
             color = ColorCodec.value_to_rgb(value)
             self._draw_color_block(draw, col, row, color)
+
+        header = pack_header(
+            file_id=file_id,
+            packet_index=packet_index,
+            total_packets=total_packets,
+            original_size=original_size,
+            payload_length=len(data),
+            file_crc32=file_crc32,
+            filename=filename,
+        )
+        metadata = protocol_bytes_to_values(header, METADATA_VALUES)
+        for i, value in enumerate(metadata):
+            self._draw_color_block(draw, i, FRAME_ROWS - 1, ColorCodec.value_to_rgb(value))
 
         return img
 
@@ -327,32 +285,28 @@ class FrameDecoder:
         # Detect corners (simplified - assumes good alignment)
         # In real implementation, would use corner detection
 
-        # Read data blocks
+        # Read the exact payload rows defined by core.protocol.  Rows 0-1
+        # contain markers, row 48 is a separator and row 49 is metadata.
         values = []
-        data_start_row = 2
-
-        for row in range(data_start_row, FRAME_ROWS - 1):
+        for row in range(2, 48):
             for col in range(FRAME_COLS):
                 color = self._sample_block(img, col, row, block_size)
-                value = self._decode_color(color)
-                values.append(value)
+                values.append(self._decode_color(color))
 
-        # Read metadata strip
         metadata_values = []
-        for col in range(FRAME_COLS):
-            color = self._sample_block(img, col, FRAME_ROWS - 1, block_size)
-            value = self._decode_color(color)
-            metadata_values.append(value)
+        for col in range(METADATA_VALUES):
+            color = self._sample_block(img, col, 49, block_size)
+            metadata_values.append(self._decode_color(color))
 
-        # Extract metadata
-        # Note: In real implementation, would properly decode metadata
-
-        # Convert data values to bytes
-        data = ColorCodec.values_to_bytes(values)
+        header_bytes = protocol_values_to_bytes(metadata_values, HEADER_BYTES)
+        header = unpack_header(header_bytes)
+        payload_length = header.get('payload_length', PAYLOAD_BYTES) if header else PAYLOAD_BYTES
+        data = protocol_values_to_bytes(values, payload_length)
 
         return {
             'data': data,
-            'metadata_values': metadata_values
+            'header': header,
+            'metadata_values': metadata_values,
         }
 
 

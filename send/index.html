@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>VEF-3 — Enviar ficheiro</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #080b12;
+            --panel: #111827;
+            --panel-2: #172033;
+            --line: #26334b;
+            --text: #f5f7fb;
+            --muted: #9aa8bd;
+            --accent: #39f5a2;
+            --accent-2: #50b8ff;
+            --danger: #ff7b86;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: radial-gradient(circle at top, #15223a 0, var(--bg) 55%);
+            color: var(--text);
+            font: 16px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        a { color: var(--accent); }
+        .page { max-width: 1080px; margin: 0 auto; padding: 24px; }
+        nav { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 30px; }
+        nav strong { letter-spacing: .04em; }
+        nav .links { display: flex; gap: 16px; font-size: .9rem; }
+        h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.05; }
+        h2 { margin: 0 0 8px; }
+        .eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: .15em; font-size: .75rem; font-weight: 700; }
+        .lead { max-width: 650px; color: var(--muted); margin: 0 0 24px; }
+        .layout { display: grid; grid-template-columns: minmax(260px, 350px) 1fr; gap: 18px; align-items: start; }
+        .panel { background: rgba(17,24,39,.88); border: 1px solid var(--line); border-radius: 18px; padding: 20px; box-shadow: 0 16px 50px rgba(0,0,0,.22); }
+        .panel + .panel { margin-top: 18px; }
+        .dropzone {
+            border: 1px dashed #4b6385; border-radius: 14px; padding: 24px 16px; text-align: center;
+            cursor: pointer; background: rgba(80,184,255,.05); transition: .2s ease;
+        }
+        .dropzone:hover, .dropzone.dragover { border-color: var(--accent); background: rgba(57,245,162,.1); }
+        .dropzone input { display: none; }
+        .drop-icon { display: block; font-size: 2.4rem; margin-bottom: 8px; }
+        .dropzone strong { display: block; }
+        .muted { color: var(--muted); font-size: .88rem; }
+        .file-card { display: none; margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--panel-2); }
+        .file-card.visible { display: block; }
+        .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+        .file-size { color: var(--muted); font-size: .85rem; }
+        label { display: block; color: var(--muted); font-size: .85rem; margin: 18px 0 6px; }
+        select, button {
+            width: 100%; border-radius: 10px; border: 1px solid var(--line); padding: 11px 13px;
+            background: var(--panel-2); color: var(--text); font: inherit;
+        }
+        button { cursor: pointer; font-weight: 700; }
+        button:hover:not(:disabled) { border-color: var(--accent); }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        .primary { color: #04120d; background: var(--accent); border-color: var(--accent); margin-top: 20px; }
+        .secondary { margin-top: 10px; }
+        .danger { color: #ffdfe2; border-color: #70323d; }
+        .note { color: var(--muted); font-size: .82rem; margin: 14px 0 0; }
+        .stage-panel { padding: 14px; }
+        .stage-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; margin: 4px 4px 12px; }
+        .stage-head h2 { font-size: 1.05rem; }
+        .status { color: var(--accent); font-size: .86rem; text-align: right; }
+        .screen {
+            position: relative; min-height: 380px; display: grid; place-items: center; overflow: hidden;
+            border-radius: 12px; background: #000; border: 1px solid #2a3850;
+        }
+        #sender-canvas { width: 100%; height: auto; max-height: 70vh; object-fit: contain; image-rendering: pixelated; display: none; }
+        .empty-screen { padding: 60px 24px; text-align: center; color: #71809a; }
+        .empty-screen .big { font-size: 3.5rem; display: block; }
+        .screen.sending { min-height: 0; }
+        .screen.sending #sender-canvas { display: block; }
+        .screen.sending .empty-screen { display: none; }
+        .screen-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+        .stat { background: var(--panel-2); border-radius: 10px; padding: 9px; min-width: 0; }
+        .stat small { display: block; color: var(--muted); font-size: .72rem; }
+        .stat strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .progress { height: 9px; border-radius: 99px; background: #26334b; overflow: hidden; margin-top: 15px; }
+        .progress > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .15s linear; }
+        .how { margin-top: 18px; color: var(--muted); font-size: .9rem; }
+        .how ol { margin: 8px 0 0; padding-left: 20px; }
+        code { color: var(--accent); }
+        @media (max-width: 760px) {
+            .page { padding: 16px; }
+            nav { margin-bottom: 22px; }
+            nav .links { gap: 9px; }
+            .layout { grid-template-columns: 1fr; }
+            .screen { min-height: 260px; }
+            .stats { grid-template-columns: repeat(2, 1fr); }
+        }
+        body.fullscreen-mode { background: #000; overflow: hidden; }
+        body.fullscreen-mode .page > *:not(.stage-panel), body.fullscreen-mode .stage-head,
+        body.fullscreen-mode .screen-controls, body.fullscreen-mode .stats,
+        body.fullscreen-mode .progress { display: none; }
+        body.fullscreen-mode .page, body.fullscreen-mode .layout, body.fullscreen-mode .stage-panel,
+        body.fullscreen-mode .screen { max-width: none; width: 100vw; height: 100vh; margin: 0; padding: 0; border: 0; border-radius: 0; }
+        body.fullscreen-mode .screen.sending #sender-canvas { width: 100vw; height: 100vh; max-height: none; }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <nav>
+            <strong>VEF-3 CORE</strong>
+            <div class="links"><a href="/send/">Enviar</a><a href="/receive/">Receber</a></div>
+        </nav>
+
+        <section>
+            <div class="eyebrow">Ecrã → câmara</div>
+            <h1>Enviar um ficheiro</h1>
+            <p class="lead">Escolhe um ficheiro, carrega em iniciar e mostra esta tela ao telemóvel. Os blocos coloridos são criados no teu navegador; o ficheiro não é enviado para o servidor.</p>
+        </section>
+
+        <div class="layout">
+            <section>
+                <div class="panel">
+                    <label class="dropzone" id="dropzone" for="file-input">
+                        <input id="file-input" type="file">
+                        <span class="drop-icon">📄</span>
+                        <strong>Escolher ficheiro</strong>
+                        <span class="muted">ou arrastar para aqui · máximo 64 MB</span>
+                    </label>
+                    <div id="file-card" class="file-card">
+                        <div id="file-name" class="file-name"></div>
+                        <div id="file-size" class="file-size"></div>
+                    </div>
+
+                    <label for="fps">Velocidade dos blocos</label>
+                    <select id="fps">
+                        <option value="10">10 fps — mais fácil de ler</option>
+                        <option value="15">15 fps</option>
+                        <option value="24">24 fps</option>
+                        <option value="30" selected>30 fps</option>
+                        <option value="60">60 fps — mais rápido</option>
+                    </select>
+
+                    <button id="start-btn" class="primary" disabled>▶ Iniciar transferência</button>
+                    <button id="pause-btn" class="secondary" disabled>Ⅱ Pausar</button>
+                    <button id="fullscreen-btn" class="secondary" disabled>⛶ Ecrã inteiro</button>
+                    <button id="reset-btn" class="secondary danger">Limpar ficheiro</button>
+                    <p class="note">Dica: aumenta o brilho, abre o ecrã inteiro e aponta a câmara para os blocos. Mantém o telemóvel imóvel.</p>
+                </div>
+
+                <div class="panel how">
+                    <strong>Como usar</strong>
+                    <ol>
+                        <li>Abre <a href="/receive/">Receber</a> no telemóvel e inicia a câmara.</li>
+                        <li>Seleciona o ficheiro nesta página.</li>
+                        <li>Inicia a transferência e mostra os blocos ao telemóvel.</li>
+                        <li>Deixa repetir até o receptor chegar a 100%.</li>
+                    </ol>
+                </div>
+            </section>
+
+            <section class="panel stage-panel">
+                <div class="stage-head">
+                    <h2>Vídeo de blocos</h2>
+                    <div id="status" class="status">Escolhe um ficheiro para começar</div>
+                </div>
+                <div id="screen" class="screen">
+                    <div class="empty-screen"><span class="big">▦</span>Os blocos aparecem aqui</div>
+                    <canvas id="sender-canvas" aria-label="Blocos de transferência visual"></canvas>
+                </div>
+                <div class="stats">
+                    <div class="stat"><small>Pacote</small><strong id="packet-stat">—</strong></div>
+                    <div class="stat"><small>Frames</small><strong id="frame-stat">—</strong></div>
+                    <div class="stat"><small>Dados por frame</small><strong id="payload-stat">—</strong></div>
+                    <div class="stat"><small>Velocidade</small><strong id="rate-stat">—</strong></div>
+                </div>
+                <div class="progress" aria-label="progresso"><div id="progress-bar"></div></div>
+            </section>
+        </div>
+    </main>
+
+    <script src="/static/protocol.js"></script>
+    <script>
+        (() => {
+            "use strict";
+            const P = window.VEFProtocol;
+            const MAX_FILE_SIZE = 64 * 1024 * 1024;
+            const CALIBRATION_FRAMES = 3;
+            const $ = id => document.getElementById(id);
+            const state = {
+                file: null,
+                data: null,
+                fileId: 0,
+                fileCrc32: 0,
+                totalPackets: 0,
+                packetIndex: 0,
+                calibrationLeft: 0,
+                frameNumber: 0,
+                running: false,
+                animationFrame: null,
+                lastDraw: 0,
+                cycle: 0
+            };
+
+            function formatBytes(bytes) {
+                if (bytes < 1024) return `${bytes} B`;
+                const units = ["KB", "MB", "GB"];
+                let value = bytes;
+                let unit = -1;
+                do { value /= 1024; unit++; } while (value >= 1024 && unit < units.length - 1);
+                return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
+            }
+
+            function setStatus(text, error = false) {
+                $("status").textContent = text;
+                $("status").style.color = error ? "var(--danger)" : "var(--accent)";
+            }
+
+            function updateStats() {
+                $("packet-stat").textContent = state.totalPackets ? `${Math.min(state.packetIndex + 1, state.totalPackets)} / ${state.totalPackets}` : "—";
+                $("frame-stat").textContent = state.frameNumber ? String(state.frameNumber) : "—";
+                $("payload-stat").textContent = `${formatBytes(P.PAYLOAD_BYTES)}`;
+                $("rate-stat").textContent = `${$("fps").value} fps`;
+                $("progress-bar").style.width = state.totalPackets ? `${(state.packetIndex / state.totalPackets) * 100}%` : "0";
+            }
+
+            function chooseFile(file) {
+                if (!file) return;
+                if (file.size > MAX_FILE_SIZE) {
+                    setStatus("O ficheiro excede o limite de 64 MB", true);
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onerror = () => setStatus("Não foi possível ler o ficheiro", true);
+                reader.onload = () => {
+                    state.file = file;
+                    state.data = new Uint8Array(reader.result);
+                    state.fileId = (crypto.getRandomValues(new Uint32Array(1)))[0];
+                    state.fileCrc32 = P.crc32(state.data);
+                    state.totalPackets = Math.max(1, Math.ceil(state.data.length / P.PAYLOAD_BYTES));
+                    state.packetIndex = 0;
+                    state.frameNumber = 0;
+                    state.calibrationLeft = CALIBRATION_FRAMES;
+                    $("file-name").textContent = file.name;
+                    $("file-size").textContent = `${formatBytes(file.size)} · CRC ${state.fileCrc32.toString(16).padStart(8, "0")}`;
+                    $("file-card").classList.add("visible");
+                    $("start-btn").disabled = false;
+                    $("fullscreen-btn").disabled = false;
+                    setStatus("Pronto para iniciar");
+                    updateStats();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+
+            function drawNextFrame() {
+                const canvas = $("sender-canvas");
+                if (state.calibrationLeft > 0) {
+                    P.drawCalibrationFrame(canvas);
+                    state.calibrationLeft--;
+                    setStatus("A calibrar a câmara…");
+                } else {
+                    const start = state.packetIndex * P.PAYLOAD_BYTES;
+                    const payload = state.data.slice(start, start + P.PAYLOAD_BYTES);
+                    const header = P.packHeader({
+                        fileId: state.fileId,
+                        packetIndex: state.packetIndex,
+                        totalPackets: state.totalPackets,
+                        originalSize: state.data.length,
+                        payloadLength: payload.length,
+                        fileCrc32: state.fileCrc32,
+                        filename: state.file.name
+                    });
+                    P.drawDataFrame(canvas, payload, header);
+                    state.packetIndex++;
+                    if (state.packetIndex >= state.totalPackets) {
+                        state.packetIndex = 0;
+                        state.calibrationLeft = CALIBRATION_FRAMES;
+                        state.cycle++;
+                        setStatus(`A repetir transferência · ciclo ${state.cycle}`);
+                    } else {
+                        setStatus("A enviar — aponta o telemóvel para os blocos");
+                    }
+                }
+                state.frameNumber++;
+                $("screen").classList.add("sending");
+                updateStats();
+            }
+
+            function animationLoop(timestamp) {
+                if (!state.running) return;
+                const interval = 1000 / Number($("fps").value);
+                if (!state.lastDraw || timestamp - state.lastDraw >= interval) {
+                    state.lastDraw = timestamp;
+                    drawNextFrame();
+                }
+                state.animationFrame = requestAnimationFrame(animationLoop);
+            }
+
+            function start() {
+                if (!state.data) return;
+                state.running = true;
+                state.lastDraw = 0;
+                $("start-btn").disabled = true;
+                $("pause-btn").disabled = false;
+                $("pause-btn").textContent = "Ⅱ Pausar";
+                setStatus("A iniciar…");
+                state.animationFrame = requestAnimationFrame(animationLoop);
+            }
+
+            function pause() {
+                state.running = !state.running;
+                if (state.running) {
+                    $("pause-btn").textContent = "Ⅱ Pausar";
+                    state.lastDraw = 0;
+                    state.animationFrame = requestAnimationFrame(animationLoop);
+                    setStatus("A continuar transferência");
+                } else {
+                    $("pause-btn").textContent = "▶ Continuar";
+                    cancelAnimationFrame(state.animationFrame);
+                    setStatus("Pausado");
+                }
+            }
+
+            function reset() {
+                state.running = false;
+                cancelAnimationFrame(state.animationFrame);
+                state.file = null;
+                state.data = null;
+                state.totalPackets = 0;
+                state.packetIndex = 0;
+                state.frameNumber = 0;
+                state.calibrationLeft = 0;
+                $("file-input").value = "";
+                $("file-card").classList.remove("visible");
+                $("start-btn").disabled = true;
+                $("pause-btn").disabled = true;
+                $("fullscreen-btn").disabled = true;
+                $("screen").classList.remove("sending");
+                $("pause-btn").textContent = "Ⅱ Pausar";
+                setStatus("Escolhe um ficheiro para começar");
+                updateStats();
+            }
+
+            $("file-input").addEventListener("change", event => chooseFile(event.target.files[0]));
+            $("start-btn").addEventListener("click", start);
+            $("pause-btn").addEventListener("click", pause);
+            $("reset-btn").addEventListener("click", reset);
+            $("fps").addEventListener("change", updateStats);
+            $("fullscreen-btn").addEventListener("click", async () => {
+                document.body.classList.add("fullscreen-mode");
+                if (document.documentElement.requestFullscreen) {
+                    try { await document.documentElement.requestFullscreen(); } catch (_) {}
+                }
+            });
+            document.addEventListener("fullscreenchange", () => {
+                if (!document.fullscreenElement) document.body.classList.remove("fullscreen-mode");
+            });
+
+            const dropzone = $("dropzone");
+            ["dragenter", "dragover"].forEach(type => dropzone.addEventListener(type, event => {
+                event.preventDefault();
+                dropzone.classList.add("dragover");
+            }));
+            ["dragleave", "drop"].forEach(type => dropzone.addEventListener(type, event => {
+                event.preventDefault();
+                dropzone.classList.remove("dragover");
+            }));
+            dropzone.addEventListener("drop", event => chooseFile(event.dataTransfer.files[0]));
+            updateStats();
+        })();
+    </script>
+</body>
+</html>

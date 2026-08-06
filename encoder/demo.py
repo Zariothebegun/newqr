@@ -40,7 +40,7 @@ def quick_demo():
     import random
     random.seed(42)
 
-    packets = list(encoder.generate_packets(max_packets=int(encoder.k * 2)))
+    packets = list(encoder.generate_packets(count=int(encoder.k * 2)))
     print(f"   Generated {len(packets)} packets")
 
     # Drop some packets to simulate loss

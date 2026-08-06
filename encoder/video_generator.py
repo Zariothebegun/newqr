@@ -7,6 +7,7 @@ Generates video files for visual file transfer.
 import argparse
 import sys
 import os
+import zlib
 from pathlib import Path
 
 # Add parent directory to path
@@ -49,19 +50,22 @@ def generate_transfer_video(
 
     file_data = input_path.read_bytes()
     file_size = len(file_data)
+    if file_size == 0:
+        raise ValueError("Cannot transfer an empty file")
 
     print(f"\nInput file: {input_path.name}")
     print(f"File size: {file_size:,} bytes ({file_size / 1024:.2f} KB)")
 
     # Calculate transfer parameters
-    from core.color_codec import BLOCKS_PER_FRAME, DATA_BLOCKS_PER_FRAME, BITS_PER_BLOCK, BYTES_PER_FRAME
+    from core.color_codec import BLOCKS_PER_FRAME, BITS_PER_BLOCK
+    from core.protocol import DATA_VALUES, PAYLOAD_BYTES
 
-    bytes_per_frame = BYTES_PER_FRAME
+    bytes_per_frame = PAYLOAD_BYTES
     k = (file_size + 1023) // 1024  # Number of 1KB blocks
 
     print(f"\nTransfer Parameters:")
     print(f"  Frame size: {FRAME_COLS}x{FRAME_ROWS} blocks ({BLOCKS_PER_FRAME} blocks)")
-    print(f"  Data blocks per frame: {DATA_BLOCKS_PER_FRAME}")
+    print(f"  Data blocks per frame: {DATA_VALUES}")
     print(f"  Bytes per frame: ~{bytes_per_frame} bytes")
     print(f"  Fountain blocks (K): {k}")
     print(f"  FPS: {fps}")
@@ -79,9 +83,20 @@ def generate_transfer_video(
     print(f"\nGenerating fountain-encoded packets...")
     encoder = FountainEncoder(file_data, block_size=1024)
 
-    # Generate enough packets (about 2x the number of blocks for robustness)
+    # Generate enough packets (about 2x the number of blocks for robustness).
+    # The first K packets are one-source-block packets, which the browser
+    # receiver can reconstruct without needing a server-side session.
     num_packets = target_frames or int(k * 2.1)
-    packets = list(encoder.generate_packets(max_packets=num_packets))
+    packets = list(encoder.generate_packets(count=num_packets))
+    file_id = int.from_bytes(os.urandom(4), 'big')
+    file_crc32 = zlib.crc32(file_data) & 0xFFFFFFFF
+    for packet in packets:
+        packet.update({
+            'file_id': file_id,
+            'file_crc32': file_crc32,
+            'total_packets': k,
+            'filename': input_path.name,
+        })
 
     print(f"  Generated {len(packets)} packets")
 

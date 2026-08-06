@@ -1,4 +1,4 @@
-"""WSGI entry point for the VEF-3 decoder.
+"""WSGI entry point for the VEF-3 sender and decoder.
 
 Render imports the application passed to Gunicorn as ``module:object``.  This
 module deliberately has no third-party imports at module load time, so the
@@ -23,6 +23,8 @@ from urllib.parse import unquote
 BASE_DIR = Path(__file__).resolve().parent
 DECODER_DIR = BASE_DIR / "decoder"
 INDEX_FILE = DECODER_DIR / "index.html"
+SEND_DIR = BASE_DIR / "send"
+SEND_INDEX_FILE = SEND_DIR / "index.html"
 
 StartResponse = Callable[[str, list[tuple[str, str]], object | None], None]
 
@@ -113,16 +115,27 @@ def create_app() -> Callable:
                 (("Allow", "GET, HEAD, OPTIONS"),),
             )
 
-        if path in {"/", "/index.html"}:
-            if not INDEX_FILE.is_file():
+        page_files = {
+            "/": INDEX_FILE,
+            "/index.html": INDEX_FILE,
+            "/receive": INDEX_FILE,
+            "/receive/": INDEX_FILE,
+            "/receive/index.html": INDEX_FILE,
+            "/send": SEND_INDEX_FILE,
+            "/send/": SEND_INDEX_FILE,
+            "/send/index.html": SEND_INDEX_FILE,
+        }
+        if path in page_files:
+            page_file = page_files[path]
+            if not page_file.is_file():
                 return _finish(
                     start_response,
                     "503 Service Unavailable",
-                    b"Decoder interface is unavailable",
+                    b"Web interface is unavailable",
                     "text/plain; charset=utf-8",
                     method,
                 )
-            body = INDEX_FILE.read_bytes()
+            body = page_file.read_bytes()
             return _finish(
                 start_response,
                 "200 OK",
@@ -151,10 +164,12 @@ def create_app() -> Callable:
         if path == "/api/info":
             body = _json_response(
                 {
-                    "name": "VEF-3 CORE Decoder API",
+                    "name": "VEF-3 CORE",
                     "version": "1.0.0",
-                    "description": "Visual Encoding File Transfer - Decoder Service",
+                    "description": "Visual Encoding File Transfer",
                     "endpoints": {
+                        "/send/": "Choose a file and show transfer blocks",
+                        "/receive/": "Read blocks with the camera",
                         "/health": "Health check",
                         "/api/info": "Service information",
                     },

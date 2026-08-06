@@ -78,26 +78,37 @@ python encoder/video_generator.py imagem.png -o output.mp4 --fps 60 --preview
 python encoder/video_generator.py --calibration
 ```
 
-### Usar o Decoder (no telemóvel)
+### Enviar e receber no navegador
 
-1. Abra `decoder/index.html` no navegador do telemóvel
-2. Clique em "Start Camera"
-3. Aponte a câmara para o ecrã a mostrar o vídeo
-4. Aguarde até a transferência completar
-5. Clique "Download File" para guardar
+A aplicação web tem agora as duas páginas que faltavam:
+
+- `GET /send/` — escolher/arrastar um ficheiro e mostrar os blocos coloridos no ecrã;
+- `GET /receive/` — abrir a câmara do telemóvel, ler os blocos e descarregar o ficheiro.
+
+O envio é local: o ficheiro é lido no navegador e nunca é carregado para o
+servidor. O emissor repete os blocos até o receptor chegar a 100%. Para usar:
+
+1. Abra `/receive/` no telemóvel e clique em **Iniciar Câmara**.
+2. Abra `/send/` no computador, escolha o ficheiro e clique em **Iniciar transferência**.
+3. Aumente o brilho, use **Ecrã inteiro** e aponte o telemóvel para os blocos.
+4. Quando terminar, clique em **Descarregar Ficheiro** no telemóvel.
+
+O formato de blocos, o cabeçalho, o CRC-32 e a conversão de cores estão em
+`core/protocol.py` e `decoder/static/protocol.js`, para o emissor e o receptor
+usarem exatamente a mesma lógica.
 
 ## 📐 Especificações Técnicas
 
 ### O Frame Visual
 
-Cada frame contém:
+Cada frame contém (3.680 blocos de dados, 80 blocos de cabeçalho e linhas reservadas):
 
 ```
 ┌────────────────────────────────────────────┐
 │ ■ ◻ ■ ■ ◻ ■ │ ← Corner markers (4)
 │ · · · · · · · · · · · · · · · · · · · · · │ ← Timing lines
 │ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │
-│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │ ← 4000 color blocks
+│ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │ ← 3680 data blocks
 │ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │   (80 cols × 50 rows)
 │ · · · · · · · · · · · · · · · · · · · · · │
 │ · █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ █ · │
@@ -119,11 +130,11 @@ Cada bloco codifica **6 bits** usando cor RGB:
 
 | Métrica | Valor |
 |---------|-------|
-| Blocos por frame | 4000 |
+| Blocos de dados por frame | 3680 |
 | Bits por bloco | 6 |
-| Bytes por frame | ~2.4 KB |
-| 30 fps | 72 KB/s |
-| 60 fps | 144 KB/s |
+| Payload máximo por frame | 2760 bytes |
+| 30 fps | ~81 KB/s |
+| 60 fps | ~162 KB/s |
 
 ### Tempos de Transferência (estimativa)
 
@@ -146,8 +157,11 @@ newqr/
 ├── encoder/                 # Encoder (computador)
 │   ├── __init__.py
 │   └── video_generator.py   # Gerador de vídeos
-├── decoder/                 # Decoder (telemóvel)
-│   └── index.html           # Site web para ler
+├── decoder/                 # Receiver web e protocolo JS
+│   ├── index.html           # Página para ler com a câmara
+│   └── static/              # Protocolo partilhado e receiver
+├── send/                    # Página para escolher e emitir ficheiros
+│   └── index.html
 ├── assets/                  # Assets e demos
 │   └── demo.gif
 ├── README.md
