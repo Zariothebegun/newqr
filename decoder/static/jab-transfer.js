@@ -2,7 +2,10 @@
  * remains the loss-tolerant file layer. */
 (function (root) {
     "use strict";
-    const JAB_SYMBOLS = 24;
+    // One primary symbol lets JAB choose its own version (up to the large
+    // single-symbol capacity) and keeps each frame compact and fast. The
+    // payload is Fountain-sliced, so we do not need JAB slave symbols here.
+    const JAB_SYMBOLS = 1;
     const JAB_COLORS = 8;
     const MAX_FILE_BYTES = 64 * 1024 * 1024;
     let jabPromise;
@@ -55,15 +58,30 @@
         if (!jabPromise) jabPromise = import("/static/third-party/jabcodeJSLib.min.js?v=jab-1").then(module => new (module.default || root.JabcodeJSInterface)());
         return jabPromise;
     }
+    async function callWhenReady(operation) {
+        // The upstream Emscripten module fetches/initializes its WASM after the
+        // ES module itself has loaded. Calling encode_message in that small
+        // window raises the characteristic `asm.m` stack error. Wait here
+        // instead of leaving the sender on "generating frame 0" forever.
+        let lastError;
+        for (let attempt = 0; attempt < 120; attempt++) {
+            try { return await operation(); }
+            catch (error) {
+                lastError = error;
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        throw lastError || new Error("JAB Code runtime did not initialize");
+    }
     async function encodePacket(packet) {
         const instance = await jab();
         // JAB's own palette, finder patterns and LDPC ECC are deliberately
         // retained. The only thing we replace is the payload protocol inside.
-        return instance.encode_message(packPacket(packet), JAB_SYMBOLS, JAB_COLORS);
+        return callWhenReady(() => instance.encode_message(packPacket(packet), JAB_SYMBOLS, JAB_COLORS));
     }
     async function decodeImage(blob) {
         const instance = await jab();
-        try { return unpackPacket(await instance.decode_message(blob)); } catch (_) { return null; }
+        try { return unpackPacket(await callWhenReady(() => instance.decode_message(blob))); } catch (_) { return null; }
     }
     root.VEFJab = { JAB_SYMBOLS, JAB_COLORS, MAX_FILE_BYTES, crc32, encodePacket, decodeImage, packPacket, unpackPacket };
 })(window);

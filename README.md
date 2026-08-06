@@ -120,7 +120,7 @@ O VEF-3 coloca um pacote Fountain dentro de cada JAB Code:
 
 | Métrica | Valor |
 |---------|-------|
-| JAB symbols por frame | 24 |
+| JAB symbols por frame | 1 primário |
 | Cores JAB | 8 |
 | Pacote Fountain | 1024 bytes |
 | 30 fps (taxa nominal) | ~30 KB/s |
