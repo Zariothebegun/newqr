@@ -1,0 +1,5 @@
+# VEF-3 CORE runtime dependencies
+Pillow>=10.0
+numpy>=1.24
+# Render uses Gunicorn to import wsgi:app.
+gunicorn>=21.2,<24
