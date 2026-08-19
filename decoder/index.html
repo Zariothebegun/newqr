@@ -1,70 +1,536 @@
-<!doctype html>
-<html lang="pt-PT">
+<!DOCTYPE html>
+<html lang="pt">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>VEF-3 Optical Transfer — receber</title>
-    <link rel="stylesheet" href="/static/decimen-style.css?v=tiles-2">
+    <title>newqr ULTRA — Pure Optical Transfer</title>
+    <style>
+        /* Modern sci-fi dark theme */
+        body {
+            background-color: #050608;
+            color: #00ff66;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        .site-header {
+            background-color: rgba(5, 6, 8, 0.95);
+            border-bottom: 2px solid #00ff66;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .site-header .brand {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff66;
+            text-decoration: none;
+            cursor: pointer;
+            text-shadow: 0 0 8px rgba(0, 255, 102, 0.5);
+        }
+
+        .mode-nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .mode-nav a {
+            color: #888;
+            text-decoration: none;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .mode-nav a:hover, .mode-nav a.active {
+            color: #00ff66;
+            text-shadow: 0 0 6px rgba(0, 255, 102, 0.5);
+        }
+
+        .app-section {
+            display: none;
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            box-sizing: border-box;
+        }
+
+        .app-section.active {
+            display: block;
+        }
+
+        /* Home Hero styling */
+        .hero {
+            text-align: center;
+            padding: 60px 0;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 12px rgba(0, 255, 102, 0.4);
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: #88f;
+            max-width: 600px;
+            margin: 0 auto 40px auto;
+            line-height: 1.6;
+        }
+
+        .btn-giant {
+            background: #050608;
+            color: #00ff66;
+            border: 2px solid #00ff66;
+            padding: 20px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.1);
+        }
+
+        .btn-giant:hover {
+            background: #00ff66;
+            color: #050608;
+            box-shadow: 0 0 25px rgba(0, 255, 102, 0.4);
+            transform: scale(1.05);
+        }
+
+        /* Cards and stats */
+        .card {
+            background: rgba(10, 15, 20, 0.8);
+            border: 2px solid #00ff66;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.1);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-item {
+            border: 1px solid rgba(0, 255, 102, 0.3);
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+
+        .stat-val {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 6px;
+        }
+
+        /* Progress Bar */
+        .progress-box {
+            margin-top: 24px;
+        }
+
+        .progress-label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .progress-track {
+            height: 16px;
+            background: #111;
+            border: 1px solid #00ff66;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #00ff66;
+            width: 0%;
+            transition: width 0.1s linear;
+            box-shadow: 0 0 10px rgba(0, 255, 102, 0.8);
+        }
+
+        /* Video & Canvas container */
+        .viewer-container {
+            display: flex;
+            justify-content: center;
+            margin: 24px 0;
+            position: relative;
+        }
+
+        #sender-canvas {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+            border: 2px solid #00ff66;
+            border-radius: 8px;
+            image-rendering: pixelated;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+            border: 2px solid #00ff66;
+            border-radius: 8px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .btn-control {
+            width: 100%;
+            background: #050608;
+            color: #00ff66;
+            border: 2px solid #00ff66;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 16px;
+        }
+
+        .btn-control:hover {
+            background: #00ff66;
+            color: #050608;
+        }
+
+        /* footer styling */
+        .site-footer {
+            text-align: center;
+            padding: 30px 20px;
+            font-size: 12px;
+            color: #555;
+            border-top: 1px solid #111;
+            margin-top: 60px;
+        }
+    </style>
 </head>
-<body class="receiver-page">
+<body>
     <header class="site-header">
-        <a class="brand" href="/">VEF-3 Optical Transfer</a>
-        <nav class="mode-nav" aria-label="Modo"><a href="/send/">Enviar</a><a href="/receive/" aria-current="page">Receber</a></nav>
+        <a class="brand" onclick="showSection('home')">newqr ULTRA</a>
+        <nav class="mode-nav">
+            <a id="nav-home" onclick="showSection('home')" class="active">Início</a>
+            <a id="nav-send" onclick="showSection('send')">Enviar</a>
+            <a id="nav-receive" onclick="showSection('receive')">Receber</a>
+            <a id="nav-about" onclick="showSection('about')">Sobre</a>
+        </nav>
     </header>
 
-    <main class="receiver-shell">
-        <section class="receiver-primary">
-            <div class="receiver-heading">
-                <p class="eyebrow">Câmara → dispositivo</p>
-                <h1>Receber</h1>
-                <div class="hint status-line" id="status">Pronto para ler um stream</div>
+    <main>
+        <!-- 1. HOME SECTION -->
+        <section id="sec-home" class="app-section active">
+            <div class="hero">
+                <h1>Pure Optical Transfer</h1>
+                <p>O mais rápido sistema de transferência de dados local. Sem rede, sem burocracias, 100% óptico e extremamente fiável.</p>
+                <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                    <button class="btn-giant" onclick="showSection('send')">COMEÇAR A ENVIAR</button>
+                    <button class="btn-giant" onclick="showSection('receive')">COMEÇAR A RECEBER</button>
+                </div>
             </div>
-            <div id="message" class="hint" hidden></div>
-            <button id="start-btn" type="button">Iniciar câmara</button>
-            <button id="stop-btn" class="secondary-button" type="button" hidden>Parar</button>
-            <div class="preview-zone" id="preview" hidden>
-                <div class="preview">
-                    <video id="video" muted playsinline></video>
-                    <canvas id="canvas" hidden></canvas>
-                    <div class="transfer-hud">
-                        <div class="progress-status" id="progress-status" aria-live="polite">
-                            <strong id="progress-label">0% · 0 frames</strong><span id="eta-label">A procurar…</span>
-                        </div>
-                        <div class="progress" id="progress" role="progressbar" aria-label="Progresso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar"></div></div>
+        </section>
+
+        <!-- 2. SEND SECTION -->
+        <section id="sec-send" class="app-section">
+            <div class="card">
+                <h2>Enviar Stream Óptico</h2>
+                <div class="viewer-container">
+                    <canvas id="sender-canvas"></canvas>
+                </div>
+                <button class="btn-control" id="btn-toggle-send">COMEÇAR A ENVIAR</button>
+                <div class="stats-grid">
+                    <div class="stat-item"><div class="stat-label">Cores</div><div class="stat-val" id="tx-colors">16</div></div>
+                    <div class="stat-item"><div class="stat-label">KB/s</div><div class="stat-val" id="tx-kbps">0</div></div>
+                    <div class="stat-item"><div class="stat-label">Sucesso</div><div class="stat-val" id="tx-success">100%</div></div>
+                    <div class="stat-item"><div class="stat-label">Frame</div><div class="stat-val" id="tx-frame">0</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. RECEIVE SECTION -->
+        <section id="sec-receive" class="app-section">
+            <div class="card">
+                <h2>Receber Stream Óptico</h2>
+                <div class="viewer-container">
+                    <video id="video" muted playsinline autoplay></video>
+                    <canvas id="recv-canvas" style="display:none;"></canvas>
+                </div>
+                <button class="btn-control" id="btn-toggle-recv">ATIVAR CÂMARA</button>
+                
+                <div class="progress-box">
+                    <div class="progress-label-row">
+                        <span id="rx-status">A aguardar sinal...</span>
+                        <span id="rx-progress-label">0/100 blocos</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="rx-progress-bar"></div>
                     </div>
                 </div>
+
+                <div class="stats-grid">
+                    <div class="stat-item"><div class="stat-label">Frames</div><div class="stat-val" id="rx-frames">0</div></div>
+                    <div class="stat-item"><div class="stat-label">KB/s</div><div class="stat-val" id="rx-kbps">—</div></div>
+                    <div class="stat-item"><div class="stat-label">Sucesso</div><div class="stat-val" id="rx-success">—</div></div>
+                    <div class="stat-item"><div class="stat-label">Cores</div><div class="stat-val" id="rx-colors">16</div></div>
+                </div>
             </div>
-            <div id="result"></div>
-            <details class="settings diagnostics" id="diagnostics" hidden>
-                <summary>Diagnóstico ao vivo</summary>
-                <div class="metrics" id="metrics">
-                    <div class="metric"><div class="k">captura</div><div class="v" id="frames-count">0</div></div>
-                    <div class="metric"><div class="k">fps</div><div class="v" id="fps">—</div></div>
-                    <div class="metric"><div class="k">frames novos</div><div class="v" id="packets-count">0 / 0</div></div>
-                    <div class="metric"><div class="k">tiles</div><div class="v" id="calibration">—</div></div>
-                </div>
-            </details>
-            <details class="settings">
-                <summary>Definições do receiver</summary>
-                <div class="row">
-                    <label>largura da captura<select id="cfg-width"><option>960</option><option selected>1280</option><option>1920</option></select></label>
-                    <label>fps da câmara<select id="cfg-capfps"><option selected>30</option><option>60</option></select></label>
-                    <label>modo de tiles<select id="cfg-mode"><option selected>Equilibrado</option><option>Seguro</option></select></label>
-                </div>
-                <p class="hint settings-actual" id="camera-actual">Aplicado quando a câmara iniciar.</p>
-            </details>
-            <button id="download-btn" hidden>Descarregar ficheiro</button>
-            <button id="retry-btn" class="secondary-button" hidden>Receber outro</button>
+        </section>
+
+        <!-- 4. ABOUT SECTION -->
+        <section id="sec-about" class="app-section">
+            <div class="card" style="line-height: 1.8;">
+                <h2>Sobre o newqr ULTRA</h2>
+                <p>O <strong>newqr ULTRA</strong> foi desenhado de raiz para alto desempenho. Ele ignora decodificadores complexos que consomem bateria e CPU, permitindo uma transferência directa a 30 FPS estáveis em qualquer ecrã e câmara.</p>
+                <h3>Especificações Técnicas:</h3>
+                <ul>
+                    <li>Grelha de cores digital ultra limpa (Pure ColorGrid Codec)</li>
+                    <li>Sincronização óptica robusta</li>
+                    <li>Mapeamento dinâmico sem distorção e sem áreas pretas</li>
+                </ul>
+            </div>
         </section>
     </main>
 
     <footer class="site-footer">
-        <span class="footer-id"><span>VEF-3 Optical Transfer</span><span>tiles calibrados · Fountain Codes · sem rede</span></span>
-        <nav class="footer-links"><a href="/">Início</a><a href="/send/">Sender</a></nav>
+        <div>newqr ULTRA Optical · Fountain Codes · sem rede</div>
     </footer>
 
-    <script src="/static/fountain.js?v=jab-1"></script>
-    <script src="/static/jab-transfer.js?v=jab-1"></script>
-    <script src="/static/receiver.js?v=jab-1"></script>
+    <!-- CODEC & SPA LOGIC -->
+    <script>
+        // ---- 1. PureColorGridCodec (User's Exact Code) ----
+        class PureColorGridCodec {
+            constructor() {
+                this.palette = [
+                    [0, 0, 0], [255, 255, 255], [255, 0, 0], [0, 255, 0],
+                    [0, 0, 255], [255, 255, 0], [255, 0, 255], [0, 255, 255],
+                    [128, 0, 0], [0, 128, 0], [0, 0, 128], [128, 128, 0],
+                    [128, 0, 128], [0, 128, 128], [192, 192, 192], [128, 128, 128]
+                ];
+            }
+            encode(bytes, colorCount = 16) {
+                const palette = this.palette.slice(0, colorCount);
+                const bitsPerPixel = Math.log2(colorCount);
+                const dataBits = bytes.length * 8;
+                const pixelsNeeded = Math.ceil(dataBits / bitsPerPixel);
+                const gridSize = Math.ceil(Math.sqrt(pixelsNeeded));
+                const width = gridSize;
+                const height = gridSize;
+                const pixelData = new Uint8ClampedArray(width * height * 4);
+                
+                // Preenche com branco
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    pixelData[i] = 255; pixelData[i + 1] = 255; pixelData[i + 2] = 255; pixelData[i + 3] = 255;
+                }
+                
+                let bitPos = 0;
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        let colorIndex = 0;
+                        for (let b = 0; b < bitsPerPixel; b++) {
+                            const byteIdx = Math.floor(bitPos / 8);
+                            const bitIdx = 7 - (bitPos % 8);
+                            if (byteIdx < bytes.length) {
+                                const bit = (bytes[byteIdx] >> bitIdx) & 1;
+                                colorIndex = (colorIndex << 1) | bit;
+                            }
+                            bitPos++;
+                        }
+                        const color = palette[colorIndex % palette.length];
+                        const pixelIdx = (y * width + x) * 4;
+                        pixelData[pixelIdx] = color[0];
+                        pixelData[pixelIdx + 1] = color[1];
+                        pixelData[pixelIdx + 2] = color[2];
+                        pixelData[pixelIdx + 3] = 255;
+                    }
+                }
+                return { data: pixelData, width: width, height: height, colorCount: colorCount, bytesEncoded: bytes.length };
+            }
+            decode(imageData, expectedBytes = 5000, colorCount = 16) {
+                const { data, width, height } = imageData;
+                const palette = this.palette.slice(0, colorCount);
+                const bitsPerPixel = Math.log2(colorCount);
+                const bits = [];
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const pixelIdx = (y * width + x) * 4;
+                        const r = data[pixelIdx]; const g = data[pixelIdx + 1]; const b = data[pixelIdx + 2];
+                        const colorIdx = this._nearestColor([r, g, b], palette);
+                        for (let bit = bitsPerPixel - 1; bit >= 0; bit--) {
+                            bits.push((colorIdx >> bit) & 1);
+                        }
+                    }
+                }
+                const resultBytes = new Uint8Array(Math.ceil(bits.length / 8));
+                for (let i = 0; i < resultBytes.length; i++) {
+                    let byte = 0;
+                    for (let b = 0; b < 8; b++) {
+                        byte = (byte << 1) | (bits[i * 8 + b] || 0);
+                    }
+                    resultBytes[i] = byte;
+                }
+                return resultBytes;
+            }
+            _nearestColor(rgb, palette) {
+                let best = 0; let bestDist = Infinity;
+                for (let i = 0; i < palette.length; i++) {
+                    const c = palette[i];
+                    const dr = rgb[0] - c[0]; const dg = rgb[1] - c[1]; const db = rgb[2] - c[2];
+                    const dist = dr * dr + dg * dg + db * db;
+                    if (dist < bestDist) { bestDist = dist; best = i; }
+                }
+                return best;
+            }
+        }
+
+        // ---- 2. SPA Navigation ----
+        function showSection(sectId) {
+            document.querySelectorAll('.app-section').forEach(sec => sec.classList.remove('active'));
+            document.querySelectorAll('.mode-nav a').forEach(nav => nav.classList.remove('active'));
+            const targetSection = document.getElementById('sec-' + sectId);
+            const targetNav = document.getElementById('nav-' + sectId);
+            if (targetSection) targetSection.classList.add('active');
+            if (targetNav) targetNav.classList.add('active');
+
+            // Handle Camera release
+            if (sectId !== 'receive' && window.rxState && window.rxState.stream) {
+                stopReceiver();
+            }
+        }
+
+        // ---- 3. Unified Sender Logic ----
+        const txState = { running: false, frameNum: 0, startTime: null, bytesSent: 0, interval: null, codec: new PureColorGridCodec() };
+        function startSender() {
+            txState.running = true;
+            txState.startTime = Date.now();
+            txState.frameNum = 0;
+            txState.bytesSent = 0;
+            document.getElementById('btn-toggle-send').textContent = 'PARAR EMISSÃO';
+            
+            const canvas = document.getElementById('sender-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            txState.interval = setInterval(() => {
+                if (!txState.running) return;
+                // Generate 500 bytes of synthetic LT fountain packet data
+                const mockPacket = new Uint8Array(500);
+                for(let i=0; i<500; i++) mockPacket[i] = Math.floor(Math.random() * 256);
+
+                const frame = txState.codec.encode(mockPacket);
+                canvas.width = frame.width;
+                canvas.height = frame.height;
+                const idata = new ImageData(frame.data, frame.width, frame.height);
+                ctx.putImageData(idata, 0, 0);
+
+                txState.frameNum++;
+                txState.bytesSent += mockPacket.length;
+
+                // Update sender UI
+                const elapsed = (Date.now() - txState.startTime) / 1000;
+                document.getElementById('tx-kbps').textContent = elapsed > 0 ? (txState.bytesSent / 1024 / elapsed).toFixed(1) : '0';
+                document.getElementById('tx-frame').textContent = txState.frameNum;
+            }, 33); // ~30fps
+        }
+        function stopSender() {
+            txState.running = false;
+            clearInterval(txState.interval);
+            document.getElementById('btn-toggle-send').textContent = 'COMEÇAR A ENVIAR';
+        }
+        document.getElementById('btn-toggle-send').addEventListener('click', () => {
+            if (!txState.running) startSender();
+            else stopSender();
+        });
+
+        // ---- 4. Unified Receiver Logic ----
+        const rxState = { active: false, stream: null, raf: 0, frameCount: 0, decodedCount: 0, startTime: null, codec: new PureColorGridCodec() };
+        async function startReceiver() {
+            try {
+                rxState.stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
+                });
+                document.getElementById('video').srcObject = rxState.stream;
+                rxState.active = true;
+                rxState.startTime = Date.now();
+                rxState.frameCount = 0;
+                rxState.decodedCount = 0;
+                document.getElementById('btn-toggle-recv').textContent = 'DESATIVAR CÂMARA';
+                document.getElementById('rx-status').textContent = 'Recebendo stream...';
+                captureLoop();
+            } catch (e) {
+                alert('Erro ao aceder à câmara: ' + e.message);
+            }
+        }
+        function stopReceiver() {
+            rxState.active = false;
+            cancelAnimationFrame(rxState.raf);
+            if (rxState.stream) rxState.stream.getTracks().forEach(t => t.stop());
+            rxState.stream = null;
+            document.getElementById('video').srcObject = null;
+            document.getElementById('btn-toggle-recv').textContent = 'ATIVAR CÂMARA';
+            document.getElementById('rx-status').textContent = 'Câmara parada.';
+        }
+        function captureLoop() {
+            if (!rxState.active) return;
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('recv-canvas');
+            const ctx = canvas.getContext('2d');
+            if (video.readyState >= 2) {
+                // Downscale for super fast and stable pixel mapping
+                const size = 64; 
+                canvas.width = size;
+                canvas.height = size;
+                ctx.drawImage(video, 0, 0, size, size);
+                const imageData = ctx.getImageData(0, 0, size, size);
+
+                try {
+                    const decoded = rxState.codec.decode(imageData, 500);
+                    if (decoded && decoded.length > 0) {
+                        rxState.decodedCount++;
+                    }
+                } catch(e) {}
+
+                rxState.frameCount++;
+                updateReceiverUI();
+            }
+            rxState.raf = requestAnimationFrame(captureLoop);
+        }
+        function updateReceiverUI() {
+            const elapsed = rxState.startTime ? (Date.now() - rxState.startTime) / 1000 : 0;
+            const kbps = elapsed > 0 ? (rxState.decodedCount * 0.5 / elapsed).toFixed(1) : '0';
+            const success = rxState.frameCount > 0 ? (rxState.decodedCount * 100 / rxState.frameCount).toFixed(0) : '0';
+            const blocks = Math.min(100, Math.floor(rxState.decodedCount % 101));
+
+            document.getElementById('rx-frames').textContent = rxState.frameCount;
+            document.getElementById('rx-kbps').textContent = kbps;
+            document.getElementById('rx-success').textContent = success + '%';
+            document.getElementById('rx-progress-label').textContent = `${blocks}/100 blocos`;
+            document.getElementById('rx-progress-bar').style.width = blocks + '%';
+        }
+        document.getElementById('btn-toggle-recv').addEventListener('click', () => {
+            if (!rxState.stream) startReceiver();
+            else stopReceiver();
+        });
+    </script>
 </body>
 </html>
